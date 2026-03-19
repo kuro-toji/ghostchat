@@ -7,7 +7,7 @@ Every GhostChat install is a relay + DHT node + peer. The network exists only be
 ## Architecture
 
 ```
-Your App IS a node → DHT → Other peer
+THis App IS a node → DHT → Other peer
 No servers. No VPS. No central point.
 ```
 
@@ -151,11 +151,11 @@ The Rust backend (Tauri) does **two things only**:
 
 | Platform | Status | Transport |
 |----------|--------|-----------|
-| **Linux** | ✅ Primary | WebRTC + WebSocket + Tor |
-| **macOS** | ✅ Supported | WebRTC + WebSocket + Tor |
-| **Windows** | ✅ Supported | WebRTC + WebSocket + Tor |
-| **Android** | 🔜 Planned | Tauri mobile (WebSocket + Tor) |
-| **iOS** | 🔜 Planned | Tauri mobile (WebSocket + Tor) |
+| **Linux** |  Primary | WebRTC + WebSocket + Tor |
+| **macOS** |  Supported | WebRTC + WebSocket + Tor |
+| **Windows** |  Supported | WebRTC + WebSocket + Tor |
+| **Android** | Planned | Tauri mobile (WebSocket + Tor) |
+| **iOS** |  Planned | Tauri mobile (WebSocket + Tor) |
 
 Desktop builds: `pnpm tauri build`
 Mobile: Tauri 2.0 mobile targets (when ready)
