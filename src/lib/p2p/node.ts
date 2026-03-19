@@ -306,6 +306,17 @@ function buildTransports(cfg: GhostNodeConfig) {
   
   // WebRTC — only in non-Tor mode (cannot go through SOCKS5)
   // Also used as clearnet fallback during Tor bootstrap if allowed
+  //
+  // ⚠️ PLATFORM NOTE: WebRTC in Tauri depends on the webview engine.
+  //   Linux:   WebKitGTK — WebRTC generally works
+  //   macOS:   WKWebView — WebRTC works
+  //   Windows: WebView2 (Chromium) — WebRTC works, best support
+  //   Android: WebView — partial WebRTC, test thoroughly
+  //   iOS:     WKWebView — WebRTC limited
+  //
+  // If WebRTC fails on a platform, connections fall back to:
+  //   WebSocket → Circuit Relay
+  // The app remains functional, just with higher latency.
   if (!cfg.torEnabled || cfg.allowClearnetBootstrap) {
     t.push(webRTC());
   }
@@ -347,9 +358,15 @@ function buildServices(cfg: GhostNodeConfig) {
     }),
     
     // GossipSub — PubSub message routing
+    // PRODUCTION: allowPublishToZeroTopicPeers is FALSE.
+    // If set to true, messages to topics with no subscribers are silently
+    // swallowed with no error — you'd think messages were sent but nobody
+    // receives them. Better to fail explicitly so the UI can show "no peers".
+    // fallbackToFloodsub: false — prevents downgrade to insecure flooding.
     pubsub: gossipsub({
-      allowPublishToZeroTopicPeers: true,
+      allowPublishToZeroTopicPeers: false,
       emitSelf: false,
+      fallbackToFloodsub: false,
     }),
     
     // Identify — peer capability announcement

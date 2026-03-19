@@ -23,7 +23,26 @@ import { kdfRatchet, kdfChain } from './kdf';
 import { encrypt, decrypt, wipeKey, type EncryptedPayload } from './encryption';
 import { bytesToHex } from '@noble/hashes/utils';
 
-/** Maximum skipped message keys to store (prevents memory exhaustion) */
+/**
+ * Maximum skipped message keys to store.
+ * 
+ * TRADEOFF:
+ *   - Too low → out-of-order messages beyond this count are UNRECOVERABLE
+ *   - Too high → memory exhaustion if attacker sends messages with huge index gaps
+ * 
+ * 100 is conservative. Signal uses ~2000. In practice, real sessions rarely
+ * skip more than ~5 messages. The only scenario hitting this is:
+ *   1. Peer sends 100+ messages while we're offline
+ *   2. We receive them all at once in random order
+ *   3. The 101st out-of-order message fails to decrypt
+ * 
+ * If this happens, the DH ratchet step on the NEXT message from the peer
+ * creates a fresh chain — they can keep chatting, only the skipped message
+ * is permanently lost.
+ * 
+ * If you need higher throughput, increase this. Each stored key is 32 bytes
+ * + overhead, so 100 keys ≈ 5KB, 2000 keys ≈ 100KB.
+ */
 const MAX_SKIPPED_KEYS = 100;
 
 /** TTL for skipped keys in milliseconds (24 hours) */
