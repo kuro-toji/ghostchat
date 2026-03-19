@@ -5,7 +5,7 @@ mod tor;
 
 use commands::TorState;
 use tor::TorController;
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 
 fn main() {
     tauri::Builder::default()

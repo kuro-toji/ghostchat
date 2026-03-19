@@ -367,7 +367,6 @@ function buildServices(cfg: GhostNodeConfig) {
     pubsub: gossipsub({
       allowPublishToZeroTopicPeers: false,
       emitSelf: false,
-      fallbackToFloodsub: false,
     }),
     
     // Identify — peer capability announcement

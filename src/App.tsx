@@ -10,8 +10,11 @@ import { StatusBar } from './components/StatusBar';
 import { AddContactModal } from './components/AddContactModal';
 import { SettingsModal } from './components/SettingsModal';
 import { KeyVerificationModal } from './components/KeyVerificationModal';
+import { useGhostChat } from './hooks/useGhostChat';
 
 export default function App() {
+  useGhostChat();
+  
   return (
     <div className="flex flex-col h-screen w-screen bg-void overflow-hidden select-none">
       {/* Main layout */}

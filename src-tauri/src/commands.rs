@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use crate::tor::TorController;
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 use tauri::State;
 
 /// App info response
@@ -26,9 +26,9 @@ pub fn greet(name: &str) -> String {
 
 /// Get Tor connection status
 #[tauri::command]
-pub fn get_tor_status(tor: State<'_, TorState>) -> crate::tor::TorStatus {
-    let controller = tor.0.lock().unwrap();
-    controller.get_status()
+pub async fn get_tor_status(tor: State<'_, TorState>) -> Result<crate::tor::TorStatus, String> {
+    let controller = tor.0.lock().await;
+    Ok(controller.get_status())
 }
 
 /// Start the Tor sidecar
@@ -37,14 +37,14 @@ pub async fn start_tor(
     app: tauri::AppHandle,
     tor: State<'_, TorState>,
 ) -> Result<(), String> {
-    let controller = tor.0.lock().map_err(|e| e.to_string())?;
+    let controller = tor.0.lock().await;
     controller.start(&app).await
 }
 
 /// Stop the Tor sidecar
 #[tauri::command]
-pub fn stop_tor(tor: State<'_, TorState>) -> Result<(), String> {
-    let controller = tor.0.lock().map_err(|e| e.to_string())?;
+pub async fn stop_tor(tor: State<'_, TorState>) -> Result<(), String> {
+    let controller = tor.0.lock().await;
     controller.stop()
 }
 

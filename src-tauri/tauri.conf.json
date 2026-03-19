@@ -35,14 +35,7 @@
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.ico"
-    ],
-    "externalBin": [
-      "binaries/tor"
     ]
   },
-  "plugins": {
-    "shell": {
-      "sidecar": true
-    }
-  }
+  "plugins": {}
 }

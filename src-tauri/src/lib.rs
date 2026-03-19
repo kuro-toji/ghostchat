@@ -5,7 +5,7 @@ mod tor;
 
 use commands::TorState;
 use tor::TorController;
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
