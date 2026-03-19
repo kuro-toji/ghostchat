@@ -83,3 +83,13 @@ export {
   type HandshakeMessage,
   type HandshakeResult,
 } from './noise';
+
+// Module 2.7 — Safety Numbers
+export {
+  generateSafetyNumber,
+  compareSafetyNumbers,
+  detectKeyChange,
+  safetyNumberToQRPayload,
+  parseSafetyNumberQR,
+  type SafetyNumber,
+} from './safety-numbers';

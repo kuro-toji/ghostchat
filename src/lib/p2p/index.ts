@@ -86,3 +86,16 @@ export {
   onIncomingMessage,
   onOutgoingMessage,
 } from './message-service';
+
+// Phase 8 — Ghost Mode
+export {
+  applyGhostMode,
+  startDissolveTimer,
+  cancelDissolveTimer,
+  cancelAllDissolveTimers,
+  triggerReadExpiration,
+  getTtlPresets,
+  formatTtl,
+  DEFAULT_GHOST_CONFIG,
+  type GhostConfig,
+} from './ghost-mode';
