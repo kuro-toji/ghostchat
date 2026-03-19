@@ -70,7 +70,7 @@ const CRASH_LOOP_WINDOW_MS: u128 = 5 * 60 * 1000;
 const RESTART_BACKOFF_BASE_MS: u64 = 2000;
 
 /// Bootstrap stall timeout (120 seconds with no progress)
-const BOOTSTRAP_STALL_TIMEOUT_MS: u128 = 120 * 1000;
+const _BOOTSTRAP_STALL_TIMEOUT_MS: u128 = 120 * 1000;
 
 /// Tor controller manages the sidecar tor process
 pub struct TorController {
@@ -343,6 +343,7 @@ impl TorController {
     }
 
     /// Check if Tor is in a restarting state and needs a new start() call
+    #[allow(dead_code)]
     pub fn needs_restart(&self) -> bool {
         if let Ok(state) = self.state.lock() {
             matches!(&*state, TorState::Restarting(_))
@@ -362,7 +363,7 @@ impl TorController {
             TorState::Bootstrapping(p) => (false, "bootstrapping", *p),
             TorState::Connected => (true, "connected", 100),
             TorState::Error(_) => (false, "error", 0),
-            TorState::Restarting(n) => (false, "restarting", 0),
+            TorState::Restarting(_n) => (false, "restarting", 0),
         };
 
         TorStatus {

@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { WifiOff, Database, HardDrive } from "lucide-react";
+import { Wifi, WifiOff, Database, HardDrive } from "lucide-react";
 import { useAppStore } from "../stores";
 
 export function StatusBar() {
@@ -9,12 +9,13 @@ export function StatusBar() {
   const peerCount = useAppStore((s) => s.peerCount);
   const dbReady = useAppStore((s) => s.dbReady);
 
-  const torLabel = torStatus === 'connected' ? `Tor: Connected (${torProgress}%)` 
+  const torLabel = torStatus === 'connected' ? 'Tor: Connected'
     : torStatus === 'bootstrapping' ? `Tor: ${torProgress}%`
+    : torStatus === 'error' ? 'Tor: Error'
     : 'Tor: Inactive';
 
   const p2pLabel = nodeOnline ? 'P2P: Online' : 'P2P: Offline';
-  const dbLabel = dbReady ? 'DB: Ready' : 'DB: Not initialized';
+  const dbLabel = dbReady ? 'DB: Ready' : 'DB: Not ready';
   const dhtLabel = `DHT: ${peerCount} peers`;
 
   return (
@@ -26,14 +27,14 @@ export function StatusBar() {
     >
       <div className="flex items-center gap-4">
         <StatusItem 
-          icon={<WifiOff size={10} />} 
+          icon={nodeOnline ? <Wifi size={10} /> : <WifiOff size={10} />} 
           label={p2pLabel} 
           color={nodeOnline ? "safe" : "dim"} 
         />
         <StatusItem 
           icon={<TorIcon />} 
           label={torLabel} 
-          color={torStatus === 'connected' ? "safe" : torStatus === 'bootstrapping' ? "glow" : "dim"} 
+          color={torStatus === 'connected' ? "safe" : torStatus === 'bootstrapping' ? "glow" : torStatus === 'error' ? "danger" : "dim"} 
         />
       </div>
       <div className="flex items-center gap-1.5 text-ghost-dim/50">

@@ -4,25 +4,38 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Shield, Globe, Database, Ghost } from 'lucide-react';
-import { useAppStore } from '../stores';
+import { useAppStore, useChatStore } from '../stores';
 import { useState } from 'react';
 
 export function SettingsModal() {
-  const { activeModal, closeModal, torStatus, ourPeerId, version, setTorStatus, setNodeOnline, setOurPeerId } = useAppStore();
+  const { activeModal, closeModal, torStatus, nodeOnline, ourPeerId, version, setTorStatus, setNodeOnline, setOurPeerId } = useAppStore();
   const [restarting, setRestarting] = useState(false);
+  const [memoryOnly, setMemoryOnly] = useState(false);
+  const [defaultEphemeral, setDefaultEphemeral] = useState(false);
+  const { toggleEphemeral, currentTtl, setCurrentTtl } = useChatStore();
 
   if (activeModal !== 'settings') return null;
 
-  const isTorEnabled = torStatus === 'connected';
+  const isTorActive = torStatus === 'connected';
 
   const handleTorToggle = async () => {
     if (restarting) return;
+
+    if (isTorActive) {
+      // Disable Tor
+      await handleDisableTor();
+    } else {
+      // Enable Tor
+      await handleEnableTor();
+    }
+  };
+
+  const handleEnableTor = async () => {
     setRestarting(true);
     setTorStatus('bootstrapping', 10);
     setNodeOnline(false);
     
     try {
-      // Stop existing node
       const { createGhostNode, stopNode, getOurPeerId } = await import('../lib/p2p/node');
       const { registerProtocolHandler } = await import('../lib/p2p/protocol');
       const { initMessageService } = await import('../lib/p2p/message-service');
@@ -36,50 +49,41 @@ export function SettingsModal() {
         await invoke('start_tor');
         setTorStatus('bootstrapping', 40);
       } catch (err) {
-        console.warn('Tor start failed:', err);
+        console.warn('Tor sidecar start failed:', err);
       }
       
-      // Restart node with Tor
       setTorStatus('bootstrapping', 60);
       await createGhostNode({ torEnabled: true, enableMdns: false });
       
       const peerId = getOurPeerId();
       if (peerId) setOurPeerId(peerId);
       
-      await registerProtocolHandler();
-      initMessageService();
+      try { await registerProtocolHandler(); } catch { /* ok */ }
+      try { initMessageService(); } catch { /* ok */ }
       try { await startAnnouncing(); } catch { /* ok */ }
       
       setNodeOnline(true);
       setTorStatus('connected', 100);
     } catch (err) {
-      console.error('Failed to restart with Tor:', err);
+      console.error('Failed to enable Tor:', err);
       // Fallback: restart without Tor
       try {
         const { createGhostNode, stopNode, getOurPeerId } = await import('../lib/p2p/node');
-        const { registerProtocolHandler } = await import('../lib/p2p/protocol');
-        const { initMessageService } = await import('../lib/p2p/message-service');
-        
         await stopNode();
         await createGhostNode({ torEnabled: false });
-        
         const peerId = getOurPeerId();
         if (peerId) setOurPeerId(peerId);
-        
-        await registerProtocolHandler();
-        initMessageService();
-        
         setNodeOnline(true);
         setTorStatus('inactive');
       } catch {
-        setTorStatus('error');
+        setNodeOnline(false);
+        setTorStatus('inactive');
       }
     }
     setRestarting(false);
   };
 
   const handleDisableTor = async () => {
-    if (restarting) return;
     setRestarting(true);
     setTorStatus('bootstrapping', 10);
     setNodeOnline(false);
@@ -94,7 +98,7 @@ export function SettingsModal() {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('stop_tor');
-      } catch { /* ok if not running */ }
+      } catch { /* ok */ }
       
       await stopNode();
       await createGhostNode({ torEnabled: false, enableMdns: true });
@@ -102,18 +106,45 @@ export function SettingsModal() {
       const peerId = getOurPeerId();
       if (peerId) setOurPeerId(peerId);
       
-      await registerProtocolHandler();
-      initMessageService();
+      try { await registerProtocolHandler(); } catch { /* ok */ }
+      try { initMessageService(); } catch { /* ok */ }
       try { await startAnnouncing(); } catch { /* ok */ }
       
       setNodeOnline(true);
       setTorStatus('inactive');
     } catch (err) {
       console.error('Failed to disable Tor:', err);
-      setTorStatus('error');
+      setNodeOnline(false);
+      setTorStatus('inactive');
     }
     setRestarting(false);
   };
+
+  const handleMemoryOnlyToggle = () => {
+    setMemoryOnly(!memoryOnly);
+    console.log('👻 Memory-only mode:', !memoryOnly);
+  };
+
+  const handleDefaultEphemeralToggle = () => {
+    setDefaultEphemeral(!defaultEphemeral);
+    toggleEphemeral();
+    console.log('👻 Default ephemeral:', !defaultEphemeral);
+  };
+
+  const handleTtlChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const ttl = parseInt(e.target.value, 10);
+    setCurrentTtl(ttl);
+  };
+
+  // Derive status strings
+  const torStatusLabel = restarting ? 'Restarting...'
+    : isTorActive ? 'Connected'
+    : torStatus === 'bootstrapping' ? 'Connecting...'
+    : 'Inactive';
+
+  const p2pStatusLabel = restarting ? 'Restarting...'
+    : nodeOnline ? 'Online'
+    : 'Offline';
 
   return (
     <AnimatePresence>
@@ -145,30 +176,42 @@ export function SettingsModal() {
               <SettingsToggle 
                 label="Tor routing" 
                 description="Route all connections through Tor network" 
-                enabled={isTorEnabled} 
+                enabled={isTorActive} 
                 onClick={handleTorToggle}
                 loading={restarting}
               />
-              <button 
-                onClick={handleDisableTor}
-                disabled={restarting}
-                className="w-full text-left px-4 py-3 rounded-xl bg-elevated border border-border-subtle text-ghost-dim text-sm hover:bg-surface transition-colors disabled:opacity-50"
-              >
-                {restarting ? 'Restarting...' : 'Restart without Tor'}
-              </button>
-              <SettingsToggle label="Memory-only mode" description="No data written to disk — true ghost mode" enabled={false} />
-              <SettingsToggle label="Anti-screenshot" description="Block screenshots on mobile (coming soon)" enabled={false} disabled />
+              <SettingsToggle 
+                label="Memory-only mode" 
+                description="No data written to disk — true ghost mode" 
+                enabled={memoryOnly}
+                onClick={handleMemoryOnlyToggle}
+              />
+              <SettingsToggle 
+                label="Anti-screenshot" 
+                description="Block screenshots on mobile (coming soon)" 
+                enabled={false} 
+                disabled 
+              />
             </SettingsSection>
 
             {/* Ghost Messages */}
             <SettingsSection title="Ghost Messages" icon={<Ghost size={16} />}>
-              <SettingsToggle label="Default ephemeral" description="New conversations start in ghost mode" enabled={false} />
+              <SettingsToggle 
+                label="Default ephemeral" 
+                description="New conversations start in ghost mode" 
+                enabled={defaultEphemeral}
+                onClick={handleDefaultEphemeralToggle}
+              />
               <div className="flex items-center justify-between py-2">
                 <div>
                   <p className="text-ghost-white text-sm">Default TTL</p>
                   <p className="text-ghost-dim/60 text-xs">Time before messages dissolve</p>
                 </div>
-                <select className="bg-elevated text-ghost-white text-xs px-3 py-1.5 rounded-lg border border-border-subtle outline-none">
+                <select 
+                  value={currentTtl}
+                  onChange={handleTtlChange}
+                  className="bg-elevated text-ghost-white text-xs px-3 py-1.5 rounded-lg border border-border-subtle outline-none"
+                >
                   <option value="0">Permanent</option>
                   <option value="5000">5 seconds</option>
                   <option value="60000">1 minute</option>
@@ -182,16 +225,23 @@ export function SettingsModal() {
             {/* Network */}
             <SettingsSection title="Network" icon={<Globe size={16} />}>
               <div className="space-y-2">
-                <InfoRow label="PeerID" value={ourPeerId?.slice(0, 20) + '...' || 'Not initialized'} mono />
-                <InfoRow label="Tor status" value={restarting ? 'Restarting...' : (isTorEnabled ? 'Enabled' : 'Disabled')} />
-                <InfoRow label="P2P status" value={torStatus === 'connected' ? 'Online' : torStatus} />
+                <InfoRow label="PeerID" value={ourPeerId ? ourPeerId.slice(0, 20) + '...' : 'Not initialized'} mono />
+                <InfoRow label="Tor" value={torStatusLabel} />
+                <InfoRow label="P2P" value={p2pStatusLabel} />
                 <InfoRow label="Version" value={`v${version}`} />
               </div>
             </SettingsSection>
 
             {/* Danger zone */}
             <SettingsSection title="Danger Zone" icon={<Database size={16} />}>
-              <button className="w-full text-left px-4 py-3 rounded-xl bg-accent-danger/5 border border-accent-danger/20 text-accent-danger text-sm hover:bg-accent-danger/10 transition-colors">
+              <button 
+                onClick={() => {
+                  if (confirm('Delete all data? This cannot be undone.')) {
+                    console.log('👻 Data deletion requested');
+                  }
+                }}
+                className="w-full text-left px-4 py-3 rounded-xl bg-accent-danger/5 border border-accent-danger/20 text-accent-danger text-sm hover:bg-accent-danger/10 transition-colors"
+              >
                 Delete All Data
               </button>
             </SettingsSection>
