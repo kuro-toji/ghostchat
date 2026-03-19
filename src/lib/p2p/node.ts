@@ -33,7 +33,7 @@
 
 import { createLibp2p, type Libp2p } from 'libp2p';
 import { noise } from '@libp2p/noise';
-import { Yamux } from '@chainsafe/libp2p-yamux';
+import { yamux } from '@libp2p/yamux';
 import { kadDHT } from '@libp2p/kad-dht';
 import { identify } from '@libp2p/identify';
 import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
@@ -56,6 +56,8 @@ export interface GhostNodeConfig {
   allowClearnetBootstrap?: boolean;
   /** Enable mDNS LAN discovery (IGNORED in browser — always disabled) */
   enableMdns?: boolean;
+  /** Ed25519 private key to derive persistent PeerID (if omitted, random) */
+  identityPrivateKey?: Uint8Array;
 }
 
 /** Default config */
@@ -124,7 +126,17 @@ export async function createGhostNode(
   const addresses = buildAddresses(cfg);
 
   try {
+    const { privateKeyFromRaw } = await import('@libp2p/crypto/keys');
+    const { createFromPrivKey } = await import('@libp2p/peer-id-factory');
+
+    // Convert Ed25519 private key to libp2p PeerId
+    const peerId = cfg.identityPrivateKey
+      ? await createFromPrivKey(await privateKeyFromRaw('Ed25519', cfg.identityPrivateKey))
+      : undefined;
+
     node = await createLibp2p({
+      // @ts-ignore — `peerId` is historically present in createLibp2p options depending on exact version combination
+      peerId,
       addresses: {
         listen: addresses,
       },
@@ -132,7 +144,7 @@ export async function createGhostNode(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       connectionEncrypters: [noise() as any],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      streamMuxers: [new Yamux() as any],
+      streamMuxers: [yamux() as any],
       peerDiscovery,
       services,
     });

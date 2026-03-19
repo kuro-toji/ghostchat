@@ -274,11 +274,22 @@ function SettingsToggle({ label, description, enabled, disabled = false, onClick
         <p className="text-ghost-white text-sm">{label}</p>
         <p className="text-ghost-dim/60 text-xs">{description}</p>
       </div>
-      <div className={`w-10 h-5 rounded-full transition-colors duration-200 flex items-center ${enabled ? 'bg-accent-glow/30 justify-end' : 'bg-elevated justify-start'}`}>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label={label}
+        disabled={disabled}
+        className={`w-10 h-5 rounded-full transition-colors duration-200 flex items-center ${enabled ? 'bg-accent-glow/30 justify-end' : 'bg-elevated justify-start'} ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!disabled && onClick) onClick();
+        }}
+      >
         <div className={`w-4 h-4 rounded-full mx-0.5 transition-colors flex items-center justify-center ${enabled ? 'bg-accent-glow' : 'bg-ghost-dim/40'}`}>
           {loading && <div className="w-2 h-2 border border-void border-t-transparent rounded-full animate-spin" />}
         </div>
-      </div>
+      </button>
     </div>
   );
 }

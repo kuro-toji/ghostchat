@@ -183,32 +183,34 @@ export function performX3DHInitiator(
  * @param usedOneTimePreKey - Whether Alice used a one-time pre-key
  * @returns Shared secret
  */
-export function performX3DHResponder(
+export async function performX3DHResponder(
+  signedPreKeyPair: X25519KeyPair,
   aliceIdentityKey: Uint8Array,
   aliceEphemeralKey: Uint8Array,
-  usedOneTimePreKey: boolean
-): Uint8Array {
-  if (!localPreKeyState) {
-    throw new Error('No local pre-key state — pre-key bundle not published');
-  }
-  
-  const { signedPreKeyPair, oneTimePreKeyPairs } = localPreKeyState;
-  
-  // Compute DH values (mirror of Alice's computation)
+  bobIdentityX25519PrivKey: Uint8Array,
+  oneTimePreKey: X25519KeyPair | null
+): Promise<Uint8Array> {
+  // Alice dh1 = X25519(alice_eph_priv,      bob_signedPreKey_pub)
+  // Bob   dh1 = X25519(bob_signedPreKey_priv, alice_eph_pub)       ✓
   const dh1 = computeSharedSecret(signedPreKeyPair.privateKey, aliceEphemeralKey);
-  const dh2 = computeSharedSecret(signedPreKeyPair.privateKey, aliceIdentityKey);
-  const dh3 = computeSharedSecret(signedPreKeyPair.privateKey, aliceEphemeralKey);
   
+  // Alice dh2 = X25519(alice_identity_priv,  bob_signedPreKey_pub)
+  // Bob   dh2 = X25519(bob_signedPreKey_priv, alice_identity_pub)  ✓
+  const dh2 = computeSharedSecret(signedPreKeyPair.privateKey, aliceIdentityKey);
+  
+  // Alice dh3 = X25519(alice_eph_priv,        bob_identity_pub)
+  // Bob   dh3 = X25519(bob_identity_priv,     alice_eph_pub)       ✓
+  const dh3 = computeSharedSecret(bobIdentityX25519PrivKey, aliceEphemeralKey);
+
+  // Concatenate DH outputs
   const dhResults = [dh1, dh2, dh3];
   
   // DH4 with one-time pre-key
-  if (usedOneTimePreKey && oneTimePreKeyPairs.length > 0) {
-    const otpk = oneTimePreKeyPairs[0];
-    const dh4 = computeSharedSecret(otpk.privateKey, aliceIdentityKey);
+  if (oneTimePreKey) {
+    const dh4 = computeSharedSecret(oneTimePreKey.privateKey, aliceIdentityKey);
     dhResults.push(dh4);
     
-    // Remove used one-time pre-key (one-time = used once)
-    oneTimePreKeyPairs.shift();
+    // The caller is responsible for removing the one-time key from storage.
   }
   
   return kdfX3DH(dhResults);

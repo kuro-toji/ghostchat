@@ -7,14 +7,15 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "agents": "npx --yes tsx scripts/spawn_agents.ts"
   },
   "dependencies": {
     "@chainsafe/libp2p-gossipsub": "1.0.0",
-    "@chainsafe/libp2p-yamux": "1.0.0",
     "@libp2p/autonat": "^2.0.0",
     "@libp2p/bootstrap": "^11.0.0",
     "@libp2p/circuit-relay-v2": "^3.0.0",
+    "@libp2p/crypto": "^5.1.13",
     "@libp2p/dcutr": "^2.0.0",
     "@libp2p/identify": "^3.0.0",
     "@libp2p/interface": "^2.11.0",
@@ -22,9 +23,11 @@
     "@libp2p/mdns": "^11.0.0",
     "@libp2p/noise": "^1.0.0",
     "@libp2p/peer-id": "^5.1.9",
+    "@libp2p/peer-id-factory": "^4.2.4",
     "@libp2p/ping": "^2.0.0",
     "@libp2p/webrtc": "^5.0.0",
     "@libp2p/websockets": "^9.0.0",
+    "@libp2p/yamux": "^7.0.4",
     "@multiformats/multiaddr": "^12.3.5",
     "@noble/ciphers": "^1.1.1",
     "@noble/curves": "^1.7.0",
@@ -54,6 +57,7 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.21.0",
     "typescript": "~5.6.2",
     "vite": "^5.4.11"
   }
