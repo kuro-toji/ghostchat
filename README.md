@@ -80,7 +80,7 @@ Cold start to first encrypted message:
 └──────┬─────────────┘
        │
        ▼
-    💬 First encrypted message sent
+     First encrypted message sent
 ```
 
 ### Failure paths
@@ -244,4 +244,4 @@ ghostchat/
 
 ## License
 
-MIT
+AGPL v3
