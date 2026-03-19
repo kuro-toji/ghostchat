@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+
+# Tauri build
+src-tauri/target/
+
+# Tor runtime data
+tor-hs/
+tor-data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Encrypted database (never commit user data)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Tor binaries (platform-specific, download separately)
+src-tauri/binaries/tor-*
+
+# Debug
+*.log
+npm-debug.log*
+pnpm-debug.log*
