@@ -26,9 +26,21 @@ export function AddContactModal() {
 
   const copyOurId = async () => {
     if (ourPeerId) {
-      await navigator.clipboard.writeText(ourPeerId);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      try {
+        await navigator.clipboard.writeText(ourPeerId);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        // Fallback for Tauri
+        try {
+          const { writeText } = await import('@tauri-apps/plugin-clipboard-manager');
+          await writeText(ourPeerId);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        } catch (e) {
+          console.error('Copy failed:', e);
+        }
+      }
     }
   };
 

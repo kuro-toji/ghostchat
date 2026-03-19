@@ -5,11 +5,115 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Shield, Globe, Database, Ghost } from 'lucide-react';
 import { useAppStore } from '../stores';
+import { useState } from 'react';
 
 export function SettingsModal() {
-  const { activeModal, closeModal, torStatus, ourPeerId, version } = useAppStore();
+  const { activeModal, closeModal, torStatus, ourPeerId, version, setTorStatus, setNodeOnline, setOurPeerId } = useAppStore();
+  const [restarting, setRestarting] = useState(false);
 
   if (activeModal !== 'settings') return null;
+
+  const isTorEnabled = torStatus === 'connected';
+
+  const handleTorToggle = async () => {
+    if (restarting) return;
+    setRestarting(true);
+    setTorStatus('bootstrapping', 10);
+    setNodeOnline(false);
+    
+    try {
+      // Stop existing node
+      const { createGhostNode, stopNode, getOurPeerId } = await import('../lib/p2p/node');
+      const { registerProtocolHandler } = await import('../lib/p2p/protocol');
+      const { initMessageService } = await import('../lib/p2p/message-service');
+      const { startAnnouncing } = await import('../lib/p2p/peer-discovery');
+      
+      await stopNode();
+      
+      // Start Tor via Tauri IPC
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('start_tor');
+        setTorStatus('bootstrapping', 40);
+      } catch (err) {
+        console.warn('Tor start failed:', err);
+      }
+      
+      // Restart node with Tor
+      setTorStatus('bootstrapping', 60);
+      await createGhostNode({ torEnabled: true, enableMdns: false });
+      
+      const peerId = getOurPeerId();
+      if (peerId) setOurPeerId(peerId);
+      
+      await registerProtocolHandler();
+      initMessageService();
+      try { await startAnnouncing(); } catch { /* ok */ }
+      
+      setNodeOnline(true);
+      setTorStatus('connected', 100);
+    } catch (err) {
+      console.error('Failed to restart with Tor:', err);
+      // Fallback: restart without Tor
+      try {
+        const { createGhostNode, stopNode, getOurPeerId } = await import('../lib/p2p/node');
+        const { registerProtocolHandler } = await import('../lib/p2p/protocol');
+        const { initMessageService } = await import('../lib/p2p/message-service');
+        
+        await stopNode();
+        await createGhostNode({ torEnabled: false });
+        
+        const peerId = getOurPeerId();
+        if (peerId) setOurPeerId(peerId);
+        
+        await registerProtocolHandler();
+        initMessageService();
+        
+        setNodeOnline(true);
+        setTorStatus('inactive');
+      } catch {
+        setTorStatus('error');
+      }
+    }
+    setRestarting(false);
+  };
+
+  const handleDisableTor = async () => {
+    if (restarting) return;
+    setRestarting(true);
+    setTorStatus('bootstrapping', 10);
+    setNodeOnline(false);
+    
+    try {
+      const { createGhostNode, stopNode, getOurPeerId } = await import('../lib/p2p/node');
+      const { registerProtocolHandler } = await import('../lib/p2p/protocol');
+      const { initMessageService } = await import('../lib/p2p/message-service');
+      const { startAnnouncing } = await import('../lib/p2p/peer-discovery');
+      
+      // Stop Tor sidecar
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('stop_tor');
+      } catch { /* ok if not running */ }
+      
+      await stopNode();
+      await createGhostNode({ torEnabled: false, enableMdns: true });
+      
+      const peerId = getOurPeerId();
+      if (peerId) setOurPeerId(peerId);
+      
+      await registerProtocolHandler();
+      initMessageService();
+      try { await startAnnouncing(); } catch { /* ok */ }
+      
+      setNodeOnline(true);
+      setTorStatus('inactive');
+    } catch (err) {
+      console.error('Failed to disable Tor:', err);
+      setTorStatus('error');
+    }
+    setRestarting(false);
+  };
 
   return (
     <AnimatePresence>
@@ -38,7 +142,20 @@ export function SettingsModal() {
           <div className="px-6 py-5 space-y-6">
             {/* Privacy */}
             <SettingsSection title="Privacy" icon={<Shield size={16} />}>
-              <SettingsToggle label="Tor routing" description="Route all connections through Tor network" enabled={torStatus === 'connected'} />
+              <SettingsToggle 
+                label="Tor routing" 
+                description="Route all connections through Tor network" 
+                enabled={isTorEnabled} 
+                onClick={handleTorToggle}
+                loading={restarting}
+              />
+              <button 
+                onClick={handleDisableTor}
+                disabled={restarting}
+                className="w-full text-left px-4 py-3 rounded-xl bg-elevated border border-border-subtle text-ghost-dim text-sm hover:bg-surface transition-colors disabled:opacity-50"
+              >
+                {restarting ? 'Restarting...' : 'Restart without Tor'}
+              </button>
               <SettingsToggle label="Memory-only mode" description="No data written to disk — true ghost mode" enabled={false} />
               <SettingsToggle label="Anti-screenshot" description="Block screenshots on mobile (coming soon)" enabled={false} disabled />
             </SettingsSection>
@@ -66,7 +183,8 @@ export function SettingsModal() {
             <SettingsSection title="Network" icon={<Globe size={16} />}>
               <div className="space-y-2">
                 <InfoRow label="PeerID" value={ourPeerId?.slice(0, 20) + '...' || 'Not initialized'} mono />
-                <InfoRow label="Tor status" value={torStatus} />
+                <InfoRow label="Tor status" value={restarting ? 'Restarting...' : (isTorEnabled ? 'Enabled' : 'Disabled')} />
+                <InfoRow label="P2P status" value={torStatus === 'connected' ? 'Online' : torStatus} />
                 <InfoRow label="Version" value={`v${version}`} />
               </div>
             </SettingsSection>
@@ -96,15 +214,20 @@ function SettingsSection({ title, icon, children }: { title: string; icon: React
   );
 }
 
-function SettingsToggle({ label, description, enabled, disabled = false }: { label: string; description: string; enabled: boolean; disabled?: boolean }) {
+function SettingsToggle({ label, description, enabled, disabled = false, onClick, loading = false }: { label: string; description: string; enabled: boolean; disabled?: boolean; onClick?: () => void; loading?: boolean }) {
   return (
-    <div className={`flex items-center justify-between py-2 ${disabled ? 'opacity-40' : ''}`}>
+    <div 
+      className={`flex items-center justify-between py-2 ${disabled ? 'opacity-40' : 'cursor-pointer'}`}
+      onClick={disabled ? undefined : onClick}
+    >
       <div>
         <p className="text-ghost-white text-sm">{label}</p>
         <p className="text-ghost-dim/60 text-xs">{description}</p>
       </div>
-      <div className={`w-10 h-5 rounded-full transition-colors duration-200 cursor-pointer flex items-center ${enabled ? 'bg-accent-glow/30 justify-end' : 'bg-elevated justify-start'}`}>
-        <div className={`w-4 h-4 rounded-full mx-0.5 transition-colors ${enabled ? 'bg-accent-glow' : 'bg-ghost-dim/40'}`} />
+      <div className={`w-10 h-5 rounded-full transition-colors duration-200 flex items-center ${enabled ? 'bg-accent-glow/30 justify-end' : 'bg-elevated justify-start'}`}>
+        <div className={`w-4 h-4 rounded-full mx-0.5 transition-colors flex items-center justify-center ${enabled ? 'bg-accent-glow' : 'bg-ghost-dim/40'}`}>
+          {loading && <div className="w-2 h-2 border border-void border-t-transparent rounded-full animate-spin" />}
+        </div>
       </div>
     </div>
   );

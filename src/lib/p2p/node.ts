@@ -66,9 +66,9 @@
 
 import { createLibp2p, type Libp2p } from 'libp2p';
 import { noise } from '@libp2p/noise';
-import { yamux } from '@libp2p/yamux';
+import { Yamux } from '@chainsafe/libp2p-yamux';
 import { kadDHT } from '@libp2p/kad-dht';
-import { gossipsub } from '@libp2p/gossipsub';
+import { GossipSub } from '@chainsafe/libp2p-gossipsub';
 import { identify } from '@libp2p/identify';
 import { autoNAT } from '@libp2p/autonat';
 import { dcutr } from '@libp2p/dcutr';
@@ -199,7 +199,8 @@ export async function createGhostNode(
     transports,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     connectionEncrypters: [noise as any],
-    streamMuxers: [yamux()],
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    streamMuxers: [new Yamux() as any],
     peerDiscovery,
     services,
   });
@@ -364,10 +365,10 @@ function buildServices(cfg: GhostNodeConfig) {
     // swallowed with no error — you'd think messages were sent but nobody
     // receives them. Better to fail explicitly so the UI can show "no peers".
     // fallbackToFloodsub: false — prevents downgrade to insecure flooding.
-    pubsub: gossipsub({
-      allowPublishToZeroTopicPeers: false,
+    pubsub: new GossipSub({
+      allowPublishToZeroPeers: false,
       emitSelf: false,
-    }),
+    }) as any,
     
     // Identify — peer capability announcement
     identify: identify(),

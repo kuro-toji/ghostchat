@@ -26,9 +26,6 @@ importers:
       '@libp2p/dcutr':
         specifier: ^2.0.0
         version: 2.0.38
-      '@libp2p/gossipsub':
-        specifier: '14'
-        version: 14.1.1
       '@libp2p/identify':
         specifier: ^3.0.0
         version: 3.0.39
@@ -56,9 +53,6 @@ importers:
       '@libp2p/websockets':
         specifier: ^9.0.0
         version: 9.2.19
-      '@libp2p/yamux':
-        specifier: '7'
-        version: 7.0.4
       '@multiformats/multiaddr':
         specifier: ^12.3.5
         version: 12.5.1
@@ -83,6 +77,9 @@ importers:
       '@stablelib/x25519':
         specifier: ^1.0.3
         version: 1.0.3
+      '@tauri-apps/plugin-clipboard-manager':
+        specifier: ^2.3.2
+        version: 2.3.2
       '@tauri-apps/plugin-sql':
         specifier: ^2.2.0
         version: 2.3.2
@@ -581,11 +578,6 @@ packages:
   '@libp2p/dcutr@2.0.38':
     resolution: {integrity: sha512-Ny3yA/BqtmRrPIiWjobduccZrUCP+H0HD+2x83wO723iCqBYIMN8Usa5arLTu+TUiMTbxtlWHYaZxGHqfKqn9Q==}
 
-  '@libp2p/gossipsub@14.1.1':
-    resolution: {integrity: sha512-pz3BuPqPc6/n3wG0p9uqEkxBpU7omVRIwC9yZz/M5WxxexHvGtXRZ948Db/SznznxG3klR5pFmohRbZ2nw6gWA==}
-    engines: {npm: '>=8.7.0'}
-    deprecated: Please use @chainsafe/libp2p-gossipsub instead - this module is only for testing
-
   '@libp2p/identify@3.0.39':
     resolution: {integrity: sha512-302y1LAGuPy8im+LUiB5+2sUOa/VZuAphOAKLsAQ/74EglWlSrw0Q7f09WUQvfNXmn7XpQnDh7GEI3NZBl54Jw==}
 
@@ -749,9 +741,6 @@ packages:
     resolution: {integrity: sha512-yFwjhArFi2QxlFEDv8BW6pmTkJKaQpPKw5lN7XYFBG84rZDDOEVIA5S13B9/nu0IiHQeucRBGwPaGWcR4h/uMw==}
     engines: {node: '>=16.0.0', npm: '>=7.0.0'}
 
-  '@libp2p/pubsub@10.1.18':
-    resolution: {integrity: sha512-Bxa0cwkaQvadyJNlJlzH0m1eo7m03G2nCpuKbcv+i0qNbyyTOydBcuoslG/UWFYhRBB9Js9R6zNIsaIgpo+iGw==}
-
   '@libp2p/record@4.0.9':
     resolution: {integrity: sha512-ITxntqQ2GDK/yA1NhzEQc2dXpxgox96xZ1cqO507choY5z5Czhz2BxfyElVO/XYjOXvylu1XN66uh3VuGHrfkQ==}
 
@@ -778,10 +767,6 @@ packages:
 
   '@libp2p/websockets@9.2.19':
     resolution: {integrity: sha512-+g2qI9Lgvyofoc6GFztPoPVZV+z/lg9pIUfneHht6j88Y7tH3NrAQ7Ki+9lqS5XBX2h1O1bHULWbCaVYCj9TZg==}
-
-  '@libp2p/yamux@7.0.4':
-    resolution: {integrity: sha512-O26zz7/xKeZkKjeWKo1bBzrkHYlPSunY3cc/TgY3uv4YZklYFDM8yB0zr6Y3oItHfx6lKhOQNVL8u0u7cNINlw==}
-    deprecated: Please use @chainsafe/libp2p-yamux instead - this module is only for testing
 
   '@multiformats/dns@1.0.13':
     resolution: {integrity: sha512-yr4bxtA3MbvJ+2461kYIYMsiiZj/FIqKI64hE4SdvWJUdWF9EtZLar38juf20Sf5tguXKFUruluswAO6JsjS2w==}
@@ -1230,6 +1215,9 @@ packages:
     engines: {node: '>= 10'}
     hasBin: true
 
+  '@tauri-apps/plugin-clipboard-manager@2.3.2':
+    resolution: {integrity: sha512-CUlb5Hqi2oZbcZf4VUyUH53XWPPdtpw43EUpCza5HWZJwxEoDowFzNUDt1tRUXA8Uq+XPn17Ysfptip33sG4eQ==}
+
   '@tauri-apps/plugin-sql@2.3.2':
     resolution: {integrity: sha512-4VDXhcKXVpyh5KKpnTGAn6q2DikPHH+TXGh9ZDQzULmG/JEz1RDvzQStgBJKddiukRbYEZ8CGIA2kskx+T+PpA==}
 
@@ -1649,10 +1637,6 @@ packages:
 
   denque@1.5.1:
     resolution: {integrity: sha512-XwE+iZ4D6ZUB7mfYRMb5wByE8L74HCn30FBN7sWnXksWc1LO1bPDl67pBR9o/kC4z/xSNAwkMYcGgqDV3BE3Hw==}
-    engines: {node: '>=0.10'}
-
-  denque@2.1.0:
-    resolution: {integrity: sha512-HVQE3AAb/pxF8fQAoiqpvg9i3evqug3hoiwakOyZAwJm+6vZehbkYXZ0l4JxS+I3QxM97v5aaRNhj8v5oBhekw==}
     engines: {node: '>=0.10'}
 
   depd@2.0.0:
@@ -2618,10 +2602,6 @@ packages:
   p-queue@7.4.1:
     resolution: {integrity: sha512-vRpMXmIkYF2/1hLBKisKeVYJZ8S2tZ0zEAmIJgdVKP2nq0nh4qCdf8bgw+ZgKrkh71AOCaqzwbJJk1WtdcF3VA==}
     engines: {node: '>=12'}
-
-  p-queue@8.1.1:
-    resolution: {integrity: sha512-aNZ+VfjobsWryoiPnEApGGmf5WmNsCo9xu8dfaYamG5qaLP7ClhLN6NgsFe6SwJ2UbLEBK5dv9x8Mn5+RVhMWQ==}
-    engines: {node: '>=18'}
 
   p-queue@9.1.0:
     resolution: {integrity: sha512-O/ZPaXuQV29uSLbxWBGGZO1mCQXV2BLIwUr59JUU9SoH76mnYvtms7aafH/isNSNGwuEfP6W/4xD0/TJXxrizw==}
@@ -3950,23 +3930,6 @@ snapshots:
       protons-runtime: 5.6.0
       uint8arraylist: 2.4.8
 
-  '@libp2p/gossipsub@14.1.1':
-    dependencies:
-      '@libp2p/crypto': 5.1.13
-      '@libp2p/interface': 2.11.0
-      '@libp2p/interface-internal': 2.3.19
-      '@libp2p/peer-id': 5.1.9
-      '@libp2p/pubsub': 10.1.18
-      '@multiformats/multiaddr': 13.0.1
-      denque: 2.1.0
-      it-length-prefixed: 10.0.1
-      it-pipe: 3.0.1
-      it-pushable: 3.2.3
-      multiformats: 13.4.2
-      protons-runtime: 5.6.0
-      uint8arraylist: 2.4.8
-      uint8arrays: 5.1.0
-
   '@libp2p/identify@3.0.39':
     dependencies:
       '@libp2p/crypto': 5.1.13
@@ -4399,23 +4362,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@libp2p/pubsub@10.1.18':
-    dependencies:
-      '@libp2p/crypto': 5.1.13
-      '@libp2p/interface': 2.11.0
-      '@libp2p/interface-internal': 2.3.19
-      '@libp2p/peer-collections': 6.0.35
-      '@libp2p/peer-id': 5.1.9
-      '@libp2p/utils': 6.7.2
-      it-length-prefixed: 10.0.1
-      it-pipe: 3.0.1
-      it-pushable: 3.2.3
-      main-event: 1.0.1
-      multiformats: 13.4.2
-      p-queue: 8.1.1
-      uint8arraylist: 2.4.8
-      uint8arrays: 5.1.0
-
   '@libp2p/record@4.0.9':
     dependencies:
       protons-runtime: 5.6.0
@@ -4566,13 +4512,6 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
-
-  '@libp2p/yamux@7.0.4':
-    dependencies:
-      '@libp2p/interface': 2.11.0
-      '@libp2p/utils': 6.7.2
-      race-signal: 2.0.0
-      uint8arraylist: 2.4.8
 
   '@multiformats/dns@1.0.13':
     dependencies:
@@ -5044,6 +4983,10 @@ snapshots:
       '@tauri-apps/cli-win32-ia32-msvc': 2.10.1
       '@tauri-apps/cli-win32-x64-msvc': 2.10.1
 
+  '@tauri-apps/plugin-clipboard-manager@2.3.2':
+    dependencies:
+      '@tauri-apps/api': 2.10.1
+
   '@tauri-apps/plugin-sql@2.3.2':
     dependencies:
       '@tauri-apps/api': 2.10.1
@@ -5496,8 +5439,6 @@ snapshots:
       unlimited-timeout: 0.1.0
 
   denque@1.5.1: {}
-
-  denque@2.1.0: {}
 
   depd@2.0.0: {}
 
@@ -6598,11 +6539,6 @@ snapshots:
     dependencies:
       eventemitter3: 5.0.4
       p-timeout: 5.1.0
-
-  p-queue@8.1.1:
-    dependencies:
-      eventemitter3: 5.0.4
-      p-timeout: 6.1.4
 
   p-queue@9.1.0:
     dependencies:
