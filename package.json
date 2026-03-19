@@ -39,7 +39,9 @@
     "@libp2p/ping": "^2.0.0",
     "@multiformats/multiaddr": "^12.3.5",
     "socks-proxy-agent": "^8.0.5",
-    "uuid": "^11.0.5"
+    "uuid": "^11.0.5",
+    "sql.js": "^1.11.0",
+    "argon2-browser": "^1.18.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
