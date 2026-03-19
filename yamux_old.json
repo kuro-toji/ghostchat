@@ -1,0 +1,9 @@
+{
+  "it-foreach": "^2.0.6",
+  "it-pushable": "^3.2.3",
+  "get-iterator": "^2.0.1",
+  "@libp2p/utils": "^6.0.0",
+  "uint8arraylist": "^2.4.8",
+  "it-stream-types": "^2.0.1",
+  "@libp2p/interface": "^2.0.0"
+}

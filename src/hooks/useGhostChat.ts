@@ -75,7 +75,11 @@ export function useGhostChat() {
         const {
           initMessageService,
           onIncomingMessage,
+          setOurIdentity,
         } = await import('../lib/p2p/message-service');
+
+        // Provide identity to message service for handshakes
+        setOurIdentity(identity);
 
         // Create the node with persistent identity
         setTorStatus('bootstrapping', 30);
@@ -349,11 +353,14 @@ async function dialContactInBackground(peerId: string): Promise<void> {
 
     // Trigger Noise XX handshake → initializes Double Ratchet
     const { createSession } = await import('../lib/p2p/session-manager');
+    const { sendHandshakeInitiation } = await import('../lib/p2p/message-service');
+    const { loadOrCreateIdentity } = await import('../lib/storage/identity-store');
     
     createSession(peerId);
-    // Note: The actual handshake sending logic should be triggered here,
-    // e.g. sending message 1 via the protocol handler.
-    // For now, we prepare the session.
+    
+    // Start Handshake: Send Noise Message 1
+    const identity = await loadOrCreateIdentity();
+    await sendHandshakeInitiation(peerId, identity.privateKey, identity.publicKey);
     
   } catch (err) {
     console.warn(`👻 Could not reach contact ${peerId.slice(0, 16)}... (they may be offline):`, err);

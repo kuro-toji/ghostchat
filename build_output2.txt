@@ -1,0 +1,28 @@
+
+> ghostchat@0.1.0 build /home/kuro/encchat/ghostchat
+> tsc && vite build
+
+vite v5.4.21 building for production...
+transforming...
+✓ 2871 modules transformed.
+x Build failed in 2.59s
+error during build:
+node_modules/.pnpm/@libp2p+yamux@7.0.4/node_modules/@libp2p/yamux/dist/src/stream.js (1:9): "AbstractStream" is not exported by "node_modules/.pnpm/@libp2p+utils@6.6.6/node_modules/@libp2p/utils/dist/src/index.js", imported by "node_modules/.pnpm/@libp2p+yamux@7.0.4/node_modules/@libp2p/yamux/dist/src/stream.js".
+file: /home/kuro/encchat/ghostchat/node_modules/.pnpm/@libp2p+yamux@7.0.4/node_modules/@libp2p/yamux/dist/src/stream.js:1:9
+
+1: import { AbstractStream } from '@libp2p/utils';
+            ^
+2: import { Uint8ArrayList } from 'uint8arraylist';
+3: import { defaultConfig } from './config.js';
+
+    at getRollupError (file:///home/kuro/encchat/ghostchat/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/es/shared/parseAst.js:402:41)
+    at error (file:///home/kuro/encchat/ghostchat/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/es/shared/parseAst.js:398:42)
+    at Module.error (file:///home/kuro/encchat/ghostchat/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/es/shared/node-entry.js:17040:16)
+    at Module.traceVariable (file:///home/kuro/encchat/ghostchat/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/es/shared/node-entry.js:17452:29)
+    at ModuleScope.findVariable (file:///home/kuro/encchat/ghostchat/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/es/shared/node-entry.js:15070:39)
+    at ChildScope.findVariable (file:///home/kuro/encchat/ghostchat/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/es/shared/node-entry.js:5673:38)
+    at Identifier.bind (file:///home/kuro/encchat/ghostchat/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/es/shared/node-entry.js:5447:40)
+    at ClassDeclaration.bind (file:///home/kuro/encchat/ghostchat/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/es/shared/node-entry.js:2829:23)
+    at ExportNamedDeclaration.bind (file:///home/kuro/encchat/ghostchat/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/es/shared/node-entry.js:12702:27)
+    at Program.bind (file:///home/kuro/encchat/ghostchat/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/es/shared/node-entry.js:2825:28)
+ ELIFECYCLE  Command failed with exit code 1.

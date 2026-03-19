@@ -126,12 +126,13 @@ export async function createGhostNode(
   const addresses = buildAddresses(cfg);
 
   try {
-    const { privateKeyFromRaw } = await import('@libp2p/crypto/keys');
+    const { generateKeyPairFromSeed } = await import('@libp2p/crypto/keys');
     const { createFromPrivKey } = await import('@libp2p/peer-id-factory');
 
     // Convert Ed25519 private key to libp2p PeerId
     const peerId = cfg.identityPrivateKey
-      ? await createFromPrivKey(await privateKeyFromRaw('Ed25519', cfg.identityPrivateKey))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ? await createFromPrivKey((await generateKeyPairFromSeed('Ed25519', cfg.identityPrivateKey)) as any)
       : undefined;
 
     node = await createLibp2p({

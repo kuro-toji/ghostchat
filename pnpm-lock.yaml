@@ -50,6 +50,9 @@ importers:
       '@libp2p/ping':
         specifier: ^2.0.0
         version: 2.0.37
+      '@libp2p/utils':
+        specifier: 6.6.6
+        version: 6.6.6
       '@libp2p/webrtc':
         specifier: ^5.0.0
         version: 5.2.24(react-native@0.84.1(@babel/core@7.29.0)(@types/react@18.3.28)(react@18.3.1))
@@ -57,8 +60,8 @@ importers:
         specifier: ^9.0.0
         version: 9.2.19
       '@libp2p/yamux':
-        specifier: ^7.0.4
-        version: 7.0.4
+        specifier: 8.0.1
+        version: 8.0.1
       '@multiformats/multiaddr':
         specifier: ^12.3.5
         version: 12.5.1
@@ -841,6 +844,9 @@ packages:
     resolution: {integrity: sha512-jlVLfac1IoBlgXL8V+XZYxNw0SOAkKweiLhXWolUbKOgRtMDquJzbwG1n8y9GtdiFKPlkiBwOB7l9xighcOR6w==}
     engines: {node: '>=16.0.0', npm: '>=7.0.0'}
 
+  '@libp2p/utils@6.6.6':
+    resolution: {integrity: sha512-66ppSKa/300gZX5TJtqeUa/rkKat1kgNAOb4flFj8WpY+oZwlqpfWFtQ/sjp0w5tlNeWpK2puWg3b3dzOIfSDg==}
+
   '@libp2p/utils@6.7.2':
     resolution: {integrity: sha512-yglVPcYErb4al3MMTdedVLLsdUvr5KaqrrxohxTl/FXMFBvBs0o3w8lo29nfnTUpnNSHFhWZ9at0ZGNnpT/C/w==}
 
@@ -853,9 +859,8 @@ packages:
   '@libp2p/websockets@9.2.19':
     resolution: {integrity: sha512-+g2qI9Lgvyofoc6GFztPoPVZV+z/lg9pIUfneHht6j88Y7tH3NrAQ7Ki+9lqS5XBX2h1O1bHULWbCaVYCj9TZg==}
 
-  '@libp2p/yamux@7.0.4':
-    resolution: {integrity: sha512-O26zz7/xKeZkKjeWKo1bBzrkHYlPSunY3cc/TgY3uv4YZklYFDM8yB0zr6Y3oItHfx6lKhOQNVL8u0u7cNINlw==}
-    deprecated: Please use @chainsafe/libp2p-yamux instead - this module is only for testing
+  '@libp2p/yamux@8.0.1':
+    resolution: {integrity: sha512-d4ObT4Yumnfz9v6+HWkb/gRgIXvJ3kpva9W98or/ngdH2S0BDnbtT9lslpopl+61mVPxMwxuuwkDDLD7S6wmeg==}
 
   '@multiformats/dns@1.0.13':
     resolution: {integrity: sha512-yr4bxtA3MbvJ+2461kYIYMsiiZj/FIqKI64hE4SdvWJUdWF9EtZLar38juf20Sf5tguXKFUruluswAO6JsjS2w==}
@@ -4147,7 +4152,7 @@ snapshots:
       '@libp2p/peer-collections': 6.0.35
       '@libp2p/peer-id': 5.1.9
       '@libp2p/record': 4.0.9
-      '@libp2p/utils': 6.7.2
+      '@libp2p/utils': 6.6.6
       '@multiformats/multiaddr': 12.5.1
       any-signal: 4.2.0
       interface-datastore: 8.3.2
@@ -4423,6 +4428,32 @@ snapshots:
       - supports-color
       - typescript
 
+  '@libp2p/utils@6.6.6':
+    dependencies:
+      '@chainsafe/is-ip': 2.1.0
+      '@chainsafe/netmask': 2.0.0
+      '@libp2p/crypto': 5.1.13
+      '@libp2p/interface': 2.11.0
+      '@libp2p/logger': 5.2.0
+      '@multiformats/multiaddr': 12.5.1
+      '@sindresorhus/fnv1a': 3.1.0
+      any-signal: 4.2.0
+      delay: 6.0.0
+      get-iterator: 2.0.1
+      is-loopback-addr: 2.0.2
+      is-plain-obj: 4.1.0
+      it-foreach: 2.1.5
+      it-pipe: 3.0.1
+      it-pushable: 3.2.3
+      it-stream-types: 2.0.2
+      main-event: 1.0.1
+      netmask: 2.0.2
+      p-defer: 4.0.1
+      race-event: 1.6.1
+      race-signal: 1.1.3
+      uint8arraylist: 2.4.8
+      uint8arrays: 5.1.0
+
   '@libp2p/utils@6.7.2':
     dependencies:
       '@chainsafe/is-ip': 2.1.0
@@ -4534,10 +4565,10 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@libp2p/yamux@7.0.4':
+  '@libp2p/yamux@8.0.1':
     dependencies:
-      '@libp2p/interface': 2.11.0
-      '@libp2p/utils': 6.7.2
+      '@libp2p/interface': 3.1.0
+      '@libp2p/utils': 7.0.13
       race-signal: 2.0.0
       uint8arraylist: 2.4.8
 

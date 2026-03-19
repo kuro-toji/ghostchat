@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "E404",
+    "summary": "No match found for version 7.0.0",
+    "detail": "The requested resource '@libp2p/yamux@7.0.0' could not be found or you do not have permission to access it.\n\nNote that you can also install from a\ntarball, folder, http url, or git url."
+  }
+}

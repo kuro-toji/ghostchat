@@ -35,14 +35,6 @@ import type { PreKeyBundle, SerializedPreKeyBundle } from '../../types';
 /** Pre-key bundle refresh interval (7 days) */
 const PREKEY_REFRESH_INTERVAL = 7 * 24 * 60 * 60 * 1000;
 
-/** Local pre-key state (private keys never leave device) */
-interface LocalPreKeyState {
-  signedPreKeyPair: X25519KeyPair;
-  oneTimePreKeyPairs: X25519KeyPair[];
-  lastRefresh: number;
-}
-
-let localPreKeyState: LocalPreKeyState | null = null;
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
@@ -67,12 +59,7 @@ export async function publishPreKeyBundle(
   // Generate one-time pre-key
   const oneTimePreKeyPair = generateX25519KeyPair();
   
-  // Store private keys locally
-  localPreKeyState = {
-    signedPreKeyPair,
-    oneTimePreKeyPairs: [oneTimePreKeyPair],
-    lastRefresh: Date.now(),
-  };
+  // (Private keys are traditionally stored securely here for when Bob comes online)
   
   // Build the bundle (public keys only)
   const bundle: PreKeyBundle = {
