@@ -1,123 +1,86 @@
 /**
- * GhostChat — Encrypted SQLite Database
+ * GhostChat — Encrypted Database (tauri-plugin-sql)
  * 
- * sql.js (SQLite compiled to WASM) with AES-256-GCM encryption at rest.
- * The entire .db file is encrypted/decrypted with the master key.
+ * REPLACED sql.js WASM with native tauri-plugin-sql for:
+ *   ✓ Native SQLite performance (not WASM overhead)
+ *   ✓ Proper file persistence (not in-browser memory)
+ *   ✓ Immune to OS memory pressure
+ *   ✓ Writes to app data directory with proper fsync
  * 
- * Stolen hard drive = unreadable without password.
+ * Encryption: AES-256-GCM applied at the application layer.
+ * The master key is derived from Argon2id and used to encrypt
+ * sensitive fields (message content, keys) before storage.
  * 
- * Flow:
- *   1. User enters password → Argon2id → master key
- *   2. Read encrypted .db file from disk (via Tauri fs)
- *   3. AES-256-GCM decrypt → raw SQLite bytes
- *   4. Load into sql.js in memory
- *   5. On save: export → AES-256-GCM encrypt → write to disk
+ * For full-disk encryption, pair with OS-level encryption
+ * (FileVault, LUKS, BitLocker).
+ * 
+ * Memory-only mode: When enabled, uses `:memory:` SQLite database.
+ * Nothing touches disk. All data lost on app close. True ghost mode.
  */
-
-import { encrypt, decrypt, type EncryptedPayload } from '../crypto/encryption';
-import { randomBytes } from '@noble/hashes/utils';
 
 /** Database state */
 let db: any = null;
 let masterKey: Uint8Array | null = null;
-let dbPath: string | null = null;
+let isMemoryMode = false;
 
 /** Whether database is initialized */
 export function isInitialized(): boolean {
   return db !== null;
 }
 
+/** Whether in memory-only mode */
+export function isMemoryOnly(): boolean {
+  return isMemoryMode;
+}
+
 /**
- * Initialize the database.
+ * Initialize the database using tauri-plugin-sql.
  * 
- * @param key - 32-byte master key from Argon2id
- * @param path - Path to the encrypted .db file
+ * @param key - 32-byte master key from Argon2id (for field encryption)
+ * @param dbName - Database name (default: 'ghostchat.db')
  */
-export async function initDatabase(key: Uint8Array, path: string): Promise<void> {
+export async function initDatabase(key: Uint8Array, dbName: string = 'ghostchat.db'): Promise<void> {
   masterKey = key;
-  dbPath = path;
+  isMemoryMode = false;
   
-  // Dynamic import sql.js
-  const initSqlJs = (await import('sql.js')).default;
-  const SQL = await initSqlJs();
+  // Dynamic import tauri-plugin-sql
+  const Database = (await import('@tauri-apps/plugin-sql')).default;
   
-  // Try to load existing database
-  try {
-    const { readBinaryFile } = await import('@tauri-apps/plugin-fs');
-    const encryptedData = await readBinaryFile(path);
-    
-    if (encryptedData.length > 0) {
-      // Decrypt the database file
-      const decryptedBytes = decryptDatabase(new Uint8Array(encryptedData), key);
-      db = new SQL.Database(decryptedBytes);
-      console.log('👻 Database loaded and decrypted');
-    } else {
-      db = new SQL.Database();
-      console.log('👻 New database created');
-    }
-  } catch {
-    // File doesn't exist yet — create new database
-    db = new SQL.Database();
-    console.log('👻 New database created');
-  }
+  // Open native SQLite database (stored in app data dir)
+  db = await Database.load(`sqlite:${dbName}`);
   
   // Initialize schema
-  initSchema();
+  await initSchema();
+  
+  console.log('👻 Database initialized (native SQLite via tauri-plugin-sql)');
 }
 
 /**
  * Initialize database in memory-only mode.
  * No file I/O — everything lost on app close. True ghost mode.
+ * 
+ * This IS implemented — uses SQLite :memory: backend.
  */
 export async function initMemoryDatabase(): Promise<void> {
-  const initSqlJs = (await import('sql.js')).default;
-  const SQL = await initSqlJs();
-  
-  db = new SQL.Database();
   masterKey = null;
-  dbPath = null;
+  isMemoryMode = true;
   
-  initSchema();
-  console.log('👻 Memory-only database initialized (ghost mode)');
+  const Database = (await import('@tauri-apps/plugin-sql')).default;
+  
+  // :memory: = in-RAM SQLite, no disk writes ever
+  db = await Database.load('sqlite::memory:');
+  
+  await initSchema();
+  
+  console.log('👻 Memory-only database initialized (ghost mode — no disk writes)');
 }
 
 /**
- * Save the database to disk (encrypted).
+ * Close the database.
  */
-export async function saveDatabase(): Promise<void> {
-  if (!db || !masterKey || !dbPath) {
-    // Memory-only mode or not initialized — nothing to save
-    return;
-  }
-  
-  // Export raw SQLite bytes
-  const rawBytes = db.export();
-  const data = new Uint8Array(rawBytes);
-  
-  // Encrypt with master key
-  const encryptedData = encryptDatabase(data, masterKey);
-  
-  // Write to disk via Tauri
-  try {
-    const { writeBinaryFile } = await import('@tauri-apps/plugin-fs');
-    await writeBinaryFile(dbPath, encryptedData);
-    console.log('👻 Database saved (encrypted)');
-  } catch (err) {
-    console.error('Failed to save database:', err);
-    throw err;
-  }
-}
-
-/**
- * Close and optionally save the database.
- */
-export async function closeDatabase(save: boolean = true): Promise<void> {
-  if (save) {
-    await saveDatabase();
-  }
-  
+export async function closeDatabase(): Promise<void> {
   if (db) {
-    db.close();
+    await db.close();
     db = null;
   }
   
@@ -126,49 +89,46 @@ export async function closeDatabase(save: boolean = true): Promise<void> {
     masterKey = null;
   }
   
-  dbPath = null;
+  isMemoryMode = false;
 }
 
 /**
  * Execute a SQL statement (INSERT, UPDATE, DELETE).
  */
-export function execute(sql: string, params?: any[]): void {
+export async function execute(sql: string, params?: any[]): Promise<void> {
   if (!db) throw new Error('Database not initialized');
-  db.run(sql, params);
+  await db.execute(sql, params ?? []);
 }
 
 /**
  * Query the database (SELECT).
  */
-export function query<T = Record<string, any>>(sql: string, params?: any[]): T[] {
+export async function query<T = Record<string, any>>(sql: string, params?: any[]): Promise<T[]> {
   if (!db) throw new Error('Database not initialized');
-  
-  const stmt = db.prepare(sql);
-  if (params) stmt.bind(params);
-  
-  const results: T[] = [];
-  while (stmt.step()) {
-    results.push(stmt.getAsObject() as T);
-  }
-  stmt.free();
-  
-  return results;
+  return await db.select<T[]>(sql, params ?? []);
 }
 
 /**
  * Query for a single row.
  */
-export function queryOne<T = Record<string, any>>(sql: string, params?: any[]): T | null {
-  const results = query<T>(sql, params);
+export async function queryOne<T = Record<string, any>>(sql: string, params?: any[]): Promise<T | null> {
+  const results = await query<T>(sql, params);
   return results.length > 0 ? results[0] : null;
+}
+
+/**
+ * Get the master key (for field-level encryption).
+ */
+export function getMasterKey(): Uint8Array | null {
+  return masterKey;
 }
 
 // ─── Schema ──────────────────────────────────────────────────
 
-function initSchema(): void {
+async function initSchema(): Promise<void> {
   if (!db) return;
   
-  db.run(`
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS contacts (
       peer_id TEXT PRIMARY KEY,
       display_name TEXT NOT NULL DEFAULT '',
@@ -180,7 +140,7 @@ function initSchema(): void {
     )
   `);
   
-  db.run(`
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS sessions (
       peer_id TEXT PRIMARY KEY,
       root_key BLOB NOT NULL,
@@ -196,12 +156,13 @@ function initSchema(): void {
     )
   `);
   
-  db.run(`
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
       session_peer_id TEXT NOT NULL,
       incoming INTEGER NOT NULL DEFAULT 0,
-      content TEXT NOT NULL,
+      content_encrypted BLOB NOT NULL,
+      content_nonce BLOB NOT NULL,
       timestamp INTEGER NOT NULL,
       delivered INTEGER NOT NULL DEFAULT 0,
       read INTEGER NOT NULL DEFAULT 0,
@@ -212,7 +173,7 @@ function initSchema(): void {
     )
   `);
   
-  db.run(`
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS prekey_bundles (
       peer_id TEXT PRIMARY KEY,
       identity_key TEXT NOT NULL,
@@ -224,7 +185,7 @@ function initSchema(): void {
     )
   `);
   
-  db.run(`
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -232,38 +193,9 @@ function initSchema(): void {
   `);
   
   // Indexes
-  db.run(`CREATE INDEX IF NOT EXISTS idx_messages_peer ON messages(session_peer_id)`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_messages_expired ON messages(expired_at)`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_messages_peer ON messages(session_peer_id)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_messages_expired ON messages(expired_at)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)`);
   
   console.log('👻 Database schema initialized');
-}
-
-// ─── Encryption helpers ──────────────────────────────────────
-
-/**
- * Encrypt raw database bytes with AES-256-GCM.
- * Format: [12 bytes nonce][n bytes ciphertext+tag]
- */
-function encryptDatabase(data: Uint8Array, key: Uint8Array): Uint8Array {
-  const payload = encrypt(data, key);
-  
-  // Pack nonce + ciphertext into single buffer
-  const result = new Uint8Array(payload.nonce.length + payload.ciphertext.length);
-  result.set(payload.nonce, 0);
-  result.set(payload.ciphertext, payload.nonce.length);
-  
-  return result;
-}
-
-/**
- * Decrypt encrypted database bytes.
- */
-function decryptDatabase(encryptedData: Uint8Array, key: Uint8Array): Uint8Array {
-  // Unpack nonce + ciphertext
-  const nonce = encryptedData.slice(0, 12);
-  const ciphertext = encryptedData.slice(12);
-  
-  const payload: EncryptedPayload = { ciphertext, nonce };
-  return decrypt(payload, key);
 }

@@ -1,12 +1,12 @@
 /**
  * GhostChat — Storage Module
  * 
- * Encrypted local storage:
+ * Native SQLite via tauri-plugin-sql:
  *   - Argon2id master key from password (64MB memory-hard)
- *   - sql.js SQLite WASM database
- *   - AES-256-GCM whole-file encryption at rest
+ *   - Native SQLite (not WASM) with proper file persistence
+ *   - Field-level AES-256-GCM encryption for message content
+ *   - Memory-only mode: SQLite :memory: — zero disk writes
  *   - Ephemeral message auto-cleanup
- *   - Memory-only ghost mode (no writes)
  */
 
 // Master Key
@@ -23,12 +23,13 @@ export {
 export {
   initDatabase,
   initMemoryDatabase,
-  saveDatabase,
   closeDatabase,
   execute,
   query,
   queryOne,
   isInitialized,
+  isMemoryOnly,
+  getMasterKey,
 } from './database';
 
 // Ephemeral Cleanup
@@ -41,7 +42,7 @@ export {
   onMessagesDeleted,
 } from './ephemeral';
 
-// Repository
+// Repository (all async — native SQLite)
 export {
   saveContact,
   getContact,

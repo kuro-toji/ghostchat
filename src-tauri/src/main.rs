@@ -10,6 +10,7 @@ use std::sync::Mutex;
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_sql::Builder::default().build())
         .manage(TorState(Mutex::new(TorController::new())))
         .invoke_handler(tauri::generate_handler![
             commands::greet,
