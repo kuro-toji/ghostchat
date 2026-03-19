@@ -1,4 +1,4 @@
-# 👻 GhostChat
+# GhostChat
 
 **Pure P2P Encrypted Messenger — No Servers, No Trace**
 
