@@ -1,13 +1,8 @@
 /**
  * GhostChat — P2P Networking Module
  * 
- * Pure P2P networking — no VPS, no bootstrap servers you own.
+ * Pure P2P networking — no VPS, no servers.
  * Every GhostChat install = relay + DHT node + peer.
- * 
- *   3.1  Node           — libp2p initialization with all services
- *   3.2  Peer Discovery — Kademlia DHT, mDNS, manual peer add
- *   3.3  Connections    — dial, retry, heartbeat, relay detection
- *   3.4  Protocol       — GhostChat wire format over libp2p streams
  */
 
 // Module 3.1 — Node
@@ -55,3 +50,39 @@ export {
   GHOSTCHAT_PROTOCOL,
   type WireMessage,
 } from './protocol';
+
+// Phase 4 — X3DH Pre-Key Bundles
+export {
+  publishPreKeyBundle,
+  fetchPreKeyBundle,
+  performX3DHInitiator,
+  performX3DHResponder,
+  startPreKeyRefresh,
+  stopPreKeyRefresh,
+} from './x3dh';
+
+// Phase 4 — Session Manager
+export {
+  createSession,
+  initSessionAsAlice,
+  initSessionAsBob,
+  encryptForPeer,
+  decryptFromPeer,
+  getSession,
+  getSessionStatus,
+  hasActiveSession,
+  closeSession,
+  getActiveSessions,
+  setEphemeralDefault,
+  setDefaultTtl,
+  onSessionChange,
+} from './session-manager';
+
+// Phase 4 — Message Service
+export {
+  initMessageService,
+  sendTextMessage,
+  flushQueuedMessages,
+  onIncomingMessage,
+  onOutgoingMessage,
+} from './message-service';
