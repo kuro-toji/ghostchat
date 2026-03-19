@@ -197,7 +197,8 @@ export async function createGhostNode(
       listen: addresses,
     },
     transports,
-    connectionEncrypters: [noise()],
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    connectionEncrypters: [noise as any],
     streamMuxers: [yamux()],
     peerDiscovery,
     services,

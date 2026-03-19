@@ -1,6 +1,6 @@
 {
   "productName": "GhostChat",
-  "identifier": "com.ghostchat.app",
+  "identifier": "com.ghostchat.desktop",
   "version": "0.1.0",
   "build": {
     "beforeDevCommand": "pnpm dev",

@@ -5,7 +5,7 @@
  */
 
 import { useEffect } from 'react';
-import { useAppStore, useChatStore, useContactStore } from '../stores';
+import { useAppStore, useContactStore } from '../stores';
 
 /**
  * Main GhostChat hook — call in App component.

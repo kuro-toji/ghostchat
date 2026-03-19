@@ -27,8 +27,8 @@ importers:
         specifier: ^3.0.0
         version: 3.0.39
       '@libp2p/interface':
-        specifier: ^3.1.0
-        version: 3.1.0
+        specifier: ^2.11.0
+        version: 2.11.0
       '@libp2p/kad-dht':
         specifier: ^14.1.0
         version: 14.2.15
@@ -39,8 +39,8 @@ importers:
         specifier: ^1.0.0
         version: 1.0.1
       '@libp2p/peer-id':
-        specifier: ^6.0.4
-        version: 6.0.4
+        specifier: ^5.1.9
+        version: 5.1.9
       '@libp2p/ping':
         specifier: ^2.0.0
         version: 2.0.37

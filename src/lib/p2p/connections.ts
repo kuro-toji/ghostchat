@@ -217,7 +217,7 @@ export async function measureLatency(peerIdStr: string): Promise<number> {
   
   const peerId = peerIdFromString(peerIdStr);
   const start = performance.now();
-  await node.services.ping.ping(peerId);
+  await (node.services.ping as { ping: (peer: typeof peerId) => Promise<number> }).ping(peerId);
   return Math.round(performance.now() - start);
 }
 
