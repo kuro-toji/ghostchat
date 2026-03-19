@@ -5,7 +5,7 @@
  */
 
 import { motion } from 'framer-motion';
-import { Send, Ghost, Clock, Smile } from 'lucide-react';
+import { Send, Ghost, Clock } from 'lucide-react';
 import { useChatStore } from '../stores';
 import { TTL_PRESETS } from '../types';
 import { useState, useRef, type KeyboardEvent } from 'react';

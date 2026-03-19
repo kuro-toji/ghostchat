@@ -22,7 +22,7 @@ import { deriveKey } from './kdf';
 import { encrypt, decrypt, type EncryptedPayload } from './encryption';
 import { sign, verify } from './identity';
 import { sha256 } from '@noble/hashes/sha256';
-import { randomBytes, bytesToHex, concatBytes } from '@noble/hashes/utils';
+import { concatBytes } from '@noble/hashes/utils';
 
 /** Noise handshake state machine phases */
 export enum HandshakePhase {

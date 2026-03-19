@@ -56,11 +56,10 @@ export function stopEphemeralCleanup(): void {
 /**
  * Process expired messages.
  */
-function processExpiredMessages(): void {
+async function processExpiredMessages(): Promise<void> {
   const now = Date.now();
   
-  // Find messages that have expired
-  const expired = query<{ id: string }>(
+  const expired = await query<{ id: string }>(
     'SELECT id FROM messages WHERE ephemeral = 1 AND expired_at IS NOT NULL AND expired_at <= ?',
     [now]
   );
@@ -69,12 +68,10 @@ function processExpiredMessages(): void {
   
   const ids = expired.map(m => m.id);
   
-  // Notify UI for dissolve animation (1100ms before deletion)
   for (const cb of expiringCallbacks) {
     cb(ids);
   }
   
-  // Delete after animation time
   setTimeout(() => {
     deleteMessages(ids);
   }, 1100);
@@ -119,8 +116,8 @@ export function setMessageExpiration(messageId: string, ttlMs: number): void {
 /**
  * Get remaining time for an ephemeral message.
  */
-export function getMessageTimeRemaining(messageId: string): number | null {
-  const result = query<{ expired_at: number | null }>(
+export async function getMessageTimeRemaining(messageId: string): Promise<number | null> {
+  const result = await query<{ expired_at: number | null }>(
     'SELECT expired_at FROM messages WHERE id = ?',
     [messageId]
   );

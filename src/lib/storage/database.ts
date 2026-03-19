@@ -103,9 +103,10 @@ export async function execute(sql: string, params?: any[]): Promise<void> {
 /**
  * Query the database (SELECT).
  */
-export async function query<T = Record<string, any>>(sql: string, params?: any[]): Promise<T[]> {
+export async function query<T>(sql: string, params?: any[]): Promise<T[]> {
   if (!db) throw new Error('Database not initialized');
-  return await db.select<T[]>(sql, params ?? []);
+  const result = await db.select(sql, params ?? []);
+  return result as T[];
 }
 
 /**

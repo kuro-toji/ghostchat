@@ -3,7 +3,7 @@
  */
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Shield, Globe, Database, Ghost, Moon } from 'lucide-react';
+import { X, Shield, Globe, Database, Ghost } from 'lucide-react';
 import { useAppStore } from '../stores';
 
 export function SettingsModal() {

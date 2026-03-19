@@ -21,9 +21,6 @@ import type { Stream } from '@libp2p/interface';
 /** GhostChat protocol identifier */
 export const GHOSTCHAT_PROTOCOL = '/ghostchat/1.0/message';
 
-/** Protocol version */
-const PROTOCOL_VERSION = 1;
-
 /** Maximum message size (1 MB) */
 const MAX_MESSAGE_SIZE = 1024 * 1024;
 

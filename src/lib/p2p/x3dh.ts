@@ -29,7 +29,7 @@ import {
 } from '../crypto';
 import { dhtPut, dhtGet } from '../p2p';
 import { sha256 } from '@noble/hashes/sha256';
-import { bytesToHex, hexToBytes, concatBytes } from '@noble/hashes/utils';
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import type { PreKeyBundle, SerializedPreKeyBundle } from '../../types';
 
 /** Pre-key bundle refresh interval (7 days) */

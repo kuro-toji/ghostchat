@@ -13,7 +13,6 @@
  */
 
 import { getNode } from './node';
-import type { PeerId } from '@libp2p/interface';
 import { peerIdFromString } from '@libp2p/peer-id';
 
 /** Announce refresh interval (30 minutes) */

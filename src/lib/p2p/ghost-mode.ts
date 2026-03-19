@@ -9,7 +9,6 @@
  *   - Read-triggered expiration (starts countdown when message is read)
  */
 
-import { useChatStore } from '../../stores';
 import type { DecryptedMessage } from '../../types';
 import { TTL_PRESETS } from '../../types';
 

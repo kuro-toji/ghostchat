@@ -4,8 +4,8 @@
  * Individual message in the chat with dissolve animation for ephemeral messages.
  */
 
-import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, Check, CheckCheck, Ghost } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Check, CheckCheck, Ghost } from 'lucide-react';
 import { useChatStore } from '../stores';
 import type { DecryptedMessage } from '../types';
 

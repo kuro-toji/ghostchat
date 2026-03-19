@@ -4,7 +4,7 @@
  * Orchestrates initialization and connects stores to services.
  */
 
-import { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { useAppStore, useChatStore, useContactStore } from '../stores';
 
 /**
@@ -17,7 +17,6 @@ export function useGhostChat() {
   const setPeerCount = useAppStore((s) => s.setPeerCount);
   const setOurPeerId = useAppStore((s) => s.setOurPeerId);
   const setDbReady = useAppStore((s) => s.setDbReady);
-  const addMessage = useChatStore((s) => s.addMessage);
   const addContact = useContactStore((s) => s.addContact);
 
   // Handle custom events from UI components

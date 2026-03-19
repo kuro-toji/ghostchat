@@ -22,8 +22,7 @@ import {
   type WireMessage,
 } from './protocol';
 import { getOurPeerId } from './node';
-import { publicKeyToHex } from '../crypto';
-import type { GhostMessage, DecryptedMessage, MessageType } from '../../types';
+import type { GhostMessage, DecryptedMessage } from '../../types';
 
 /** Incoming message callback */
 type IncomingMessageCallback = (message: DecryptedMessage) => void;

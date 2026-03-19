@@ -3,7 +3,7 @@
  */
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, UserPlus, Copy, QrCode } from 'lucide-react';
+import { X, UserPlus, Copy } from 'lucide-react';
 import { useAppStore } from '../stores';
 import { useState } from 'react';
 

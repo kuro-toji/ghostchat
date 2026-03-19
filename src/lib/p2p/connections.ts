@@ -14,7 +14,7 @@
 
 import { getNode } from './node';
 import { peerIdFromString } from '@libp2p/peer-id';
-import type { Connection, Stream } from '@libp2p/interface';
+import type { Stream } from '@libp2p/interface';
 
 /** Connection state for a peer */
 export interface PeerConnection {
