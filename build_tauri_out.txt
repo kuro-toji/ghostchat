@@ -42,3 +42,13 @@ dist/assets/node-Dmgi2jbP.js             674.11 kB │ gzip: 217.18 kB
 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
 ✓ built in 4.68s
    Compiling ghostchat v0.1.0 (/home/kuro/encchat/ghostchat/src-tauri)
+    Finished `release` profile [optimized] target(s) in 25.39s
+       Built application at: /home/kuro/encchat/ghostchat/src-tauri/target/release/ghostchat
+        Info Patching /home/kuro/encchat/ghostchat/src-tauri/target/release/ghostchat with bundle type information: deb
+    Bundling GhostChat_0.1.0_amd64.deb (/home/kuro/encchat/ghostchat/src-tauri/target/release/bundle/deb/GhostChat_0.1.0_amd64.deb)
+        Info Patching /home/kuro/encchat/ghostchat/src-tauri/target/release/ghostchat with bundle type information: rpm
+    Bundling GhostChat-0.1.0-1.x86_64.rpm (/home/kuro/encchat/ghostchat/src-tauri/target/release/bundle/rpm/GhostChat-0.1.0-1.x86_64.rpm)
+    Finished 2 bundles at:
+        /home/kuro/encchat/ghostchat/src-tauri/target/release/bundle/deb/GhostChat_0.1.0_amd64.deb
+        /home/kuro/encchat/ghostchat/src-tauri/target/release/bundle/rpm/GhostChat-0.1.0-1.x86_64.rpm
+
