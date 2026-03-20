@@ -17,4 +17,14 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ["react", "react-dom"],
+          libp2p: ["libp2p", "@libp2p/crypto", "@libp2p/webrtc", "@libp2p/websockets", "@libp2p/yamux", "@libp2p/noise", "@libp2p/kad-dht"],
+        },
+      },
+    },
+  },
 }));

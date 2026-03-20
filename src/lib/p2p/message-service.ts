@@ -22,7 +22,7 @@ import {
   type WireMessage,
 } from './protocol';
 import { getOurPeerId } from './node';
-import type { GhostMessage, DecryptedMessage } from '../../types';
+import type { DecryptedMessage } from '../../types';
 import {
   initHandshake,
   createMessage1,
@@ -46,7 +46,7 @@ type OutgoingMessageCallback = (message: DecryptedMessage) => void;
 const outgoingCallbacks: Set<OutgoingMessageCallback> = new Set();
 
 /** Message queue for peers that are offline */
-const messageQueue = new Map<string, GhostMessage[]>();
+const messageQueue = new Map<string, WireMessage[]>();
 
 /** Pending handshakes for Noise XX */
 const pendingHandshakes = new Map<string, HandshakeState>();
@@ -197,13 +197,13 @@ function handleIncomingMessage(senderPeerId: string, wireMsg: WireMessage): void
  */
 function queueMessage(
   peerId: string,
-  _wireMsg: WireMessage,
+  wireMsg: WireMessage,
   _options: { ephemeral?: boolean; ttl?: number }
 ): void {
   if (!messageQueue.has(peerId)) {
     messageQueue.set(peerId, []);
   }
-  // Messages are queued in encrypted form for later sending
+  messageQueue.get(peerId)!.push(wireMsg);
 }
 
 /**
@@ -214,7 +214,14 @@ export async function flushQueuedMessages(peerId: string): Promise<number> {
   if (!queued || queued.length === 0) return 0;
   
   let sent = 0;
-  // TODO: Re-send queued messages
+  for (const wireMsg of queued) {
+    try {
+      await sendWireMessage(peerId, wireMsg);
+      sent++;
+    } catch (err) {
+      console.error(`👻 Failed to re-send queued message to ${peerId.slice(0, 16)}`, err);
+    }
+  }
   messageQueue.delete(peerId);
   
   return sent;

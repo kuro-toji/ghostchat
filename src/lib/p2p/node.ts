@@ -41,6 +41,8 @@ import { webRTC } from '@libp2p/webrtc';
 import { webSockets } from '@libp2p/websockets';
 import { bootstrap } from '@libp2p/bootstrap';
 import { ping } from '@libp2p/ping';
+import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
+import { createFromPrivKey } from '@libp2p/peer-id-factory';
 
 /** Node configuration options */
 export interface GhostNodeConfig {
@@ -126,9 +128,6 @@ export async function createGhostNode(
   const addresses = buildAddresses(cfg);
 
   try {
-    const { generateKeyPairFromSeed } = await import('@libp2p/crypto/keys');
-    const { createFromPrivKey } = await import('@libp2p/peer-id-factory');
-
     // Convert Ed25519 private key to libp2p PeerId
     const peerId = cfg.identityPrivateKey
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
