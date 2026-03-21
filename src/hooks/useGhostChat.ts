@@ -58,10 +58,12 @@ export function useGhostChat() {
         // attemptTor is non-blocking in the background
         attemptTor(setTorStatus);
 
-        // ── 2. Start Rust P2P Node ──
+        // ── 2. Start Rust P2P Node (with same identity key) ──
         setTorStatus('bootstrapping', 30);
         console.log('👻 Invoking start_p2p_node on backend...');
-        const ourPeerId = await invoke<string>('start_p2p_node');
+        const ourPeerId = await invoke<string>('start_p2p_node', {
+          identityKeyHex: bytesToHex(identity.privateKey),
+        });
         
         setOurPeerId(ourPeerId);
         setNodeOnline(true);
@@ -233,7 +235,7 @@ async function attemptTor(
 async function dialContactInBackground(peerId: string): Promise<void> {
   try {
     console.log(`👻 Triggering backend dial for ${peerId.slice(0, 16)}...`);
-    await invoke('dial_peer', { peerId });
+    await invoke('dial_peer', { peerId, multiaddr: null });
 
     const { createSession } = await import('../lib/p2p/session-manager');
     const { sendHandshakeInitiation } = await import('../lib/p2p/message-service');

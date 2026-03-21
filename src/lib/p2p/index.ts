@@ -1,48 +1,11 @@
 /**
  * GhostChat — P2P Networking Module
  * 
- * Pure P2P networking — no VPS, no servers.
- * Every GhostChat install = relay + DHT node + peer.
+ * Pure P2P networking — Rust backend handles TCP/mDNS/DHT.
+ * Frontend communicates via Tauri IPC (invoke/listen).
  */
 
-// Module 3.1 — Node
-export {
-  createGhostNode,
-  getNode,
-  stopNode,
-  isNodeRunning,
-  getOurPeerId,
-  getMultiaddrs,
-  type GhostNodeConfig,
-} from './node';
-
-// Module 3.2 — Peer Discovery
-export {
-  startAnnouncing,
-  stopAnnouncing,
-  findPeer,
-  dhtPut,
-  dhtGet,
-  onPeerDiscovered,
-  getConnectedPeerCount,
-  getConnectedPeers,
-  addKnownPeer,
-} from './peer-discovery';
-
-// Module 3.3 — Connections
-export {
-  dialPeer,
-  dialWithRetry,
-  openStream,
-  disconnectPeer,
-  getConnectionInfo,
-  getAllConnections,
-  onConnectionChange,
-  measureLatency,
-  type PeerConnection,
-} from './connections';
-
-// Module 3.4 — Protocol
+// Module 3.4 — Protocol (IPC version)
 export {
   registerProtocolHandler,
   sendWireMessage,
