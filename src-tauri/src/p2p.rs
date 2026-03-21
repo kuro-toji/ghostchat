@@ -49,6 +49,20 @@ pub enum SwarmCommand {
         peer_id: PeerId,
         responder: oneshot::Sender<Result<(), String>>,
     },
+    DhtPut {
+        key: Vec<u8>,
+        value: Vec<u8>,
+        responder: oneshot::Sender<Result<(), String>>,
+    },
+    DhtGet {
+        key: Vec<u8>,
+        responder: oneshot::Sender<Result<Vec<u8>, String>>,
+    },
+}
+
+enum DhtResponder {
+    Put(oneshot::Sender<Result<(), String>>),
+    Get(oneshot::Sender<Result<Vec<u8>, String>>),
 }
 
 use std::sync::Mutex;
@@ -80,6 +94,7 @@ pub async fn run_swarm(
     app: AppHandle,
 ) {
     let mut connected_peers: HashSet<String> = HashSet::new();
+    let mut dht_queries: std::collections::HashMap<kad::QueryId, DhtResponder> = std::collections::HashMap::new();
     let rendezvous_server_peer_id = PeerId::from_str("QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt").unwrap();
 
     loop {
@@ -130,6 +145,22 @@ pub async fn run_swarm(
                             rendezvous_server_peer_id,
                         );
                         let _ = responder.send(Ok(()));
+                    }
+                    SwarmCommand::DhtPut { key, value, responder } => {
+                        let record = libp2p::kad::Record {
+                            key: libp2p::kad::RecordKey::new(&key),
+                            value,
+                            publisher: None,
+                            expires: None,
+                        };
+                        match swarm.behaviour_mut().kad.put_record(record, libp2p::kad::Quorum::One) {
+                            Ok(query_id) => { dht_queries.insert(query_id, DhtResponder::Put(responder)); }
+                            Err(e) => { let _ = responder.send(Err(e.to_string())); }
+                        }
+                    }
+                    SwarmCommand::DhtGet { key, responder } => {
+                        let query_id = swarm.behaviour_mut().kad.get_record(libp2p::kad::RecordKey::new(&key));
+                        dht_queries.insert(query_id, DhtResponder::Get(responder));
                     }
                 }
             }
@@ -190,10 +221,41 @@ pub async fn run_swarm(
                 SwarmEvent::Behaviour(GhostBehaviourEvent::Kad(kad::Event::OutboundQueryProgressed { result, .. })) => {
                     if let kad::QueryResult::GetClosestPeers(Ok(ok)) = result {
                         for peer in ok.peers {
-                            // Dial the discovered peer if we aren't already connected
-                            let _ = swarm.dial(peer);
+                SwarmEvent::Behaviour(GhostBehaviourEvent::Kad(kad::Event::OutboundQueryProgressed { id, result, .. })) => {
+                    match result {
+                        kad::QueryResult::GetClosestPeers(Ok(ok)) => {
+                            for peer in ok.peers {
+                                // Dial the discovered peer if we aren't already connected
+                                let _ = swarm.dial(peer);
+                            }
                         }
+                        kad::QueryResult::GetRecord(res) => {
+                            if let Some(DhtResponder::Get(responder)) = dht_queries.remove(&id) {
+                                match res {
+                                    Ok(ok) => {
+                                        if let Some(record) = ok.records.into_iter().next() {
+                                            let _ = responder.send(Ok(record.record.value));
+                                        } else {
+                                            let _ = responder.send(Err("NotFound".into()));
+                                        }
+                                    }
+                                    Err(e) => { let _ = responder.send(Err(e.to_string())); }
+                                }
+                            }
+                        }
+                        kad::QueryResult::PutRecord(res) => {
+                            if let Some(DhtResponder::Put(responder)) = dht_queries.remove(&id) {
+                                match res {
+                                    Ok(_) => { let _ = responder.send(Ok(())); }
+                                    Err(e) => { let _ = responder.send(Err(e.to_string())); }
+                                }
+                            }
+                        }
+                        _ => {}
                     }
+                }
+                SwarmEvent::Behaviour(GhostBehaviourEvent::Kad(event)) => {
+                    println!("👻 Kad event: {:?}", event);
                 }
                 SwarmEvent::Behaviour(GhostBehaviourEvent::Dcutr(event)) => {
                     println!("👻 DCuTR Holepunch event: {:?}", event);
@@ -475,6 +537,41 @@ pub async fn discover_peers(
         })
         .await
         .map_err(|e| e.to_string())?;
+    } else {
+        return Err("Node offline".into());
+    }
+
+    receiver.await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn dht_put(
+    key: Vec<u8>,
+    value: Vec<u8>,
+    state: State<'_, P2PState>,
+) -> Result<(), String> {
+    let (responder, receiver) = oneshot::channel();
+
+    let sender = state.command_sender.lock().unwrap().clone();
+    if let Some(s) = sender {
+        s.send(SwarmCommand::DhtPut { key, value, responder }).await.map_err(|e| e.to_string())?;
+    } else {
+        return Err("Node offline".into());
+    }
+
+    receiver.await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn dht_get(
+    key: Vec<u8>,
+    state: State<'_, P2PState>,
+) -> Result<Vec<u8>, String> {
+    let (responder, receiver) = oneshot::channel();
+
+    let sender = state.command_sender.lock().unwrap().clone();
+    if let Some(s) = sender {
+        s.send(SwarmCommand::DhtGet { key, responder }).await.map_err(|e| e.to_string())?;
     } else {
         return Err("Node offline".into());
     }

@@ -27,13 +27,29 @@ import {
   type IdentityKeyPair,
   type X25519KeyPair,
 } from '../crypto';
-// DHT operations are now in the Rust backend — stub until Tauri commands are added
-async function dhtPut(_key: Uint8Array, _value: Uint8Array): Promise<void> {
-  console.warn('👻 dhtPut stub — DHT put not yet wired to Rust backend');
+async function dhtPut(key: Uint8Array, value: Uint8Array): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('dht_put', { key: Array.from(key), value: Array.from(value) });
 }
-async function dhtGet(_key: Uint8Array): Promise<Uint8Array | null> {
-  console.warn('👻 dhtGet stub — DHT get not yet wired to Rust backend');
-  return null;
+async function dhtGet(key: Uint8Array): Promise<Uint8Array | null> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  try {
+    const res = await invoke<number[]>('dht_get', { key: Array.from(key) });
+    return new Uint8Array(res);
+  } catch (err) {
+    if (String(err).includes('NotFound')) return null;
+    throw err;
+  }
+}
+
+let localSignedPreKeyPair: X25519KeyPair | null = null;
+let localOneTimePreKeyPair: X25519KeyPair | null = null;
+
+export function getLocalPreKeyState() {
+  return {
+    signedPreKeyPair: localSignedPreKeyPair,
+    oneTimePreKeyPair: localOneTimePreKeyPair,
+  };
 }
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
@@ -66,7 +82,9 @@ export async function publishPreKeyBundle(
   // Generate one-time pre-key
   const oneTimePreKeyPair = generateX25519KeyPair();
   
-  // (Private keys are traditionally stored securely here for when Bob comes online)
+  // Save local private keys for responder session construction
+  localSignedPreKeyPair = signedPreKeyPair;
+  localOneTimePreKeyPair = oneTimePreKeyPair;
   
   // Build the bundle (public keys only)
   const bundle: PreKeyBundle = {

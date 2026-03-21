@@ -20,6 +20,7 @@ interface ContactState {
   updateContact: (peerId: string, updates: Partial<Contact>) => void;
   setOnline: (peerId: string, online: boolean) => void;
   setSearchQuery: (query: string) => void;
+  addContactIfNotExists: (contact: Contact) => void;
 
   // Selectors
   filteredContacts: () => Contact[];
@@ -42,6 +43,11 @@ export const useContactStore = create<ContactState>((set, get) => ({
       contacts: state.contacts.map((c) => (c.peerId === peerId ? { ...c, online } : c)),
     })),
   setSearchQuery: (query) => set({ searchQuery: query }),
+  addContactIfNotExists: (contact) => set((state) => ({
+    contacts: state.contacts.find((c) => c.peerId === contact.peerId)
+      ? state.contacts
+      : [...state.contacts, contact],
+  })),
 
   filteredContacts: () => {
     const { contacts, searchQuery } = get();

@@ -54,6 +54,18 @@ export function useGhostChat() {
 
         setOurIdentity(identity);
 
+        // Derive and set X25519 Responder Identity using classic RFC7748 clamped scalar derivation
+        import('@noble/hashes/sha512').then(({ sha512 }) => {
+          const hash = sha512(identity.privateKey.slice(0, 32));
+          const scalar = hash.slice(0, 32);
+          scalar[0] &= 248;
+          scalar[31] &= 127;
+          scalar[31] |= 64;
+          import('../lib/p2p/message-service').then(({ setOurX25519Identity }) => {
+            setOurX25519Identity(scalar);
+          });
+        });
+
         // Wait to make sure Tor starts if needed (we still init Tor for anonymous outbound traffic)
         // attemptTor is non-blocking in the background
         attemptTor(setTorStatus);
@@ -68,6 +80,13 @@ export function useGhostChat() {
         setOurPeerId(ourPeerId);
         setNodeOnline(true);
         console.log('👻 Backend node started. Our PeerID:', ourPeerId);
+
+        // Step 1: Publish X3DH prekey bundle to DHT
+        import('../lib/p2p/x3dh').then(({ publishPreKeyBundle }) => {
+          publishPreKeyBundle(identity, ourPeerId).catch(err => {
+            console.error('👻 Failed to publish X3DH PreKeys:', err);
+          });
+        });
 
         // ── 3. Register Protocol and Listeners ──
         await registerProtocolHandler();
@@ -151,13 +170,20 @@ export function useGhostChat() {
         const { hasActiveSession } = await import('../lib/p2p/session-manager');
         const nodeOnline = useAppStore.getState().nodeOnline;
         
-        if (nodeOnline && hasActiveSession(currentPeerId)) {
-          const { sendTextMessage } = await import('../lib/p2p/message-service');
-          
-          const msg = await sendTextMessage(currentPeerId, text, { ephemeral, ttl });
-          addMessage(msg);
-          console.log('👻 Message sent to', currentPeerId.slice(0, 16) + '...');
-          return;
+        if (nodeOnline) {
+          if (hasActiveSession(currentPeerId)) {
+            const { sendTextMessage } = await import('../lib/p2p/message-service');
+            const msg = await sendTextMessage(currentPeerId, text, { ephemeral, ttl });
+            addMessage(msg);
+            console.log('👻 Message sent to', currentPeerId.slice(0, 16) + '...');
+            return;
+          } else {
+            const { sendX3DHMessage } = await import('../lib/p2p/message-service');
+            const msg = await sendX3DHMessage(currentPeerId, text, { ephemeral, ttl });
+            if (msg) addMessage(msg);
+            console.log('👻 X3DH Initial Message sent to', currentPeerId.slice(0, 16) + '...');
+            return;
+          }
         }
       } catch (err) {
         console.warn('👻 P2P send failed:', err);
@@ -257,12 +283,8 @@ async function dialContactInBackground(peerId: string, multiaddr: string | null 
     await invoke('dial_peer', { peerId, multiaddr });
 
     const { createSession } = await import('../lib/p2p/session-manager');
-    const { sendHandshakeInitiation } = await import('../lib/p2p/message-service');
-    const { loadOrCreateIdentity } = await import('../lib/storage/identity-store');
     
     createSession(peerId);
-    const identity = await loadOrCreateIdentity();
-    await sendHandshakeInitiation(peerId, identity.privateKey, identity.publicKey);
   } catch (err) {
     console.warn(`👻 Could not handshake with contact ${peerId.slice(0, 16)}...`, err);
   }

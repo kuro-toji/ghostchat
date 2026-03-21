@@ -20,7 +20,7 @@ export interface WireMessage {
   dhPublicKey: Uint8Array;
   chainIndex: number;
   previousChainLength: number;
-  messageType: 'text' | 'key_exchange' | 'system' | 'prekey';
+  messageType: 'text' | 'key_exchange' | 'system' | 'prekey' | 'x3dh_initial';
 }
 
 type MessageCallback = (senderPeerId: string, message: WireMessage) => void;
@@ -114,7 +114,7 @@ function serializeWireMessage(msg: WireMessage): Uint8Array {
   view.setUint32(offset, msg.previousChainLength, false);
   offset += 4;
   
-  const typeMap = { text: 0, key_exchange: 1, system: 2, prekey: 3 };
+  const typeMap: Record<WireMessage['messageType'], number> = { text: 0, key_exchange: 1, system: 2, prekey: 3, x3dh_initial: 4 };
   buf[offset] = typeMap[msg.messageType] ?? 0;
   
   return buf;
@@ -150,7 +150,7 @@ function deserializeWireMessage(data: Uint8Array): WireMessage {
   offset += 4;
   
   const typeReverseMap: Record<number, WireMessage['messageType']> = {
-    0: 'text', 1: 'key_exchange', 2: 'system', 3: 'prekey',
+    0: 'text', 1: 'key_exchange', 2: 'system', 3: 'prekey', 4: 'x3dh_initial',
   };
   const messageType = typeReverseMap[data[offset]] ?? 'text';
   

@@ -53,9 +53,14 @@ const pendingHandshakes = new Map<string, HandshakeState>();
 
 /** Our identity keypair for handshakes */
 let ourIdentity: IdentityKeyPair | null = null;
+let ourIdentityX25519: Uint8Array | null = null;
 
 export function setOurIdentity(identity: IdentityKeyPair): void {
   ourIdentity = identity;
+}
+
+export function setOurX25519Identity(privKey: Uint8Array): void {
+  ourIdentityX25519 = privKey;
 }
 
 /**
@@ -141,6 +146,89 @@ export async function sendTextMessage(
   return displayMsg;
 }
 
+export async function sendX3DHMessage(
+  recipientPeerId: string,
+  text: string,
+  options: {
+    ephemeral?: boolean;
+    ttl?: number;
+  } = {}
+): Promise<DecryptedMessage | null> {
+  const ourPeerId = useAppStore.getState().ourPeerId;
+  if (!ourPeerId || !ourIdentity) throw new Error('Node not initialized');
+
+  if (hasActiveSession(recipientPeerId)) {
+    return sendTextMessage(recipientPeerId, text, options);
+  }
+
+  const { fetchPreKeyBundle, performX3DHInitiator } = await import('./x3dh');
+
+  const bundle = await fetchPreKeyBundle(recipientPeerId);
+  if (!bundle) {
+    console.warn(`👻 Falling back to Noise XX for ${recipientPeerId}`);
+    await sendHandshakeInitiation(recipientPeerId, ourIdentity.privateKey, ourIdentity.publicKey);
+    return null;
+  }
+
+  if (!ourIdentityX25519) throw new Error('X25519 identity not set');
+
+  // Derive shared secret
+  const { sharedSecret, ephemeralPublicKey } = performX3DHInitiator(ourIdentityX25519, bundle);
+
+  // Initialize session
+  initSessionAsAlice(recipientPeerId, sharedSecret, bundle.signedPreKeyPub);
+  console.log(`👻 Double Ratchet initialized as Alice (X3DH)`);
+
+  const plaintext = new TextEncoder().encode(text || ' ');
+  const ratchetMsg = encryptForPeer(recipientPeerId, plaintext);
+
+  const payloadStr = JSON.stringify({
+    aliceIdentityKey: Array.from(ourIdentity.publicKey),
+    aliceEphemeralKey: Array.from(ephemeralPublicKey),
+    usedOneTimePreKey: bundle.oneTimePreKeyPub ? Array.from(bundle.oneTimePreKeyPub) : null,
+    payload: {
+      ciphertext: Array.from(ratchetMsg.payload.ciphertext),
+      nonce: Array.from(ratchetMsg.payload.nonce),
+    }
+  });
+
+  const wireMsg: WireMessage = {
+    version: 1,
+    recipientPeerId,
+    ciphertext: new TextEncoder().encode(payloadStr),
+    nonce: new Uint8Array(12),
+    dhPublicKey: ratchetMsg.header.dhPublicKey,
+    chainIndex: ratchetMsg.header.messageIndex,
+    previousChainLength: ratchetMsg.header.previousChainLength,
+    messageType: 'x3dh_initial',
+  };
+
+  try {
+    await sendWireMessage(recipientPeerId, wireMsg);
+  } catch (err) {
+    console.warn(`👻 Queuing X3DH prekey message for ${recipientPeerId}`);
+    queueMessage(recipientPeerId, wireMsg, options);
+  }
+
+  if (!text) return null;
+
+  const displayMsg: DecryptedMessage = {
+    id: uuidv4(),
+    senderPeerId: ourPeerId,
+    content: text,
+    timestamp: Date.now(),
+    incoming: false,
+    delivered: true,
+    read: false,
+    ephemeral: options.ephemeral ?? false,
+    ttl: options.ttl ?? 0,
+    expiresAt: options.ttl ? Date.now() + options.ttl : null,
+  };
+  
+  for (const cb of outgoingCallbacks) cb(displayMsg);
+  return displayMsg;
+}
+
 /**
  * Handle an incoming wire message.
  */
@@ -148,6 +236,88 @@ function handleIncomingMessage(senderPeerId: string, wireMsg: WireMessage): void
   try {
     if (wireMsg.messageType === 'key_exchange') {
       return handleHandshakeMessage(senderPeerId, wireMsg);
+    }
+    
+    if (wireMsg.messageType === 'x3dh_initial') {
+      import('./x3dh').then(async ({ performX3DHResponder, getLocalPreKeyState }) => {
+        try {
+          const jsonStr = new TextDecoder().decode(wireMsg.ciphertext);
+          const parsed = JSON.parse(jsonStr);
+
+          const localState = getLocalPreKeyState();
+          if (!localState.signedPreKeyPair) throw new Error("Local X3DH state missing");
+          if (!ourIdentityX25519) throw new Error("Local X25519 identity missing");
+
+          const aliceIdentityKey = new Uint8Array(parsed.aliceIdentityKey);
+          const aliceEphemeralKey = new Uint8Array(parsed.aliceEphemeralKey);
+
+          // Perform X3DH
+          const sharedSecret = await performX3DHResponder(
+            localState.signedPreKeyPair,
+            aliceIdentityKey,
+            aliceEphemeralKey,
+            ourIdentityX25519,
+            localState.oneTimePreKeyPair 
+          );
+
+          // Initialize session
+          initSessionAsBob(senderPeerId, sharedSecret);
+          console.log(`👻 Double Ratchet initialized as Bob (X3DH)`);
+
+          // Decrypt the payload
+          const ratchetMsg = {
+            header: {
+              dhPublicKey: wireMsg.dhPublicKey,
+              previousChainLength: wireMsg.previousChainLength,
+              messageIndex: wireMsg.chainIndex,
+            },
+            payload: {
+              ciphertext: new Uint8Array(parsed.payload.ciphertext),
+              nonce: new Uint8Array(parsed.payload.nonce),
+            },
+          };
+
+          const plaintext = decryptFromPeer(senderPeerId, ratchetMsg);
+          const text = new TextDecoder().decode(plaintext);
+
+          if (text.trim() === '') return;
+
+          // Auto-add contact if missing
+          import('../../stores').then(async ({ useContactStore }) => {
+            const { bytesToHex } = await import('@noble/hashes/utils');
+            const contact = {
+              peerId: senderPeerId,
+              displayName: `User ${senderPeerId.slice(0, 4)}`,
+              publicKey: bytesToHex(aliceIdentityKey),
+              addedAt: Date.now(),
+              lastSeen: Date.now(),
+              isVerified: false,
+              defaultTtl: 0,
+              online: true,
+              multiaddr: null,
+            };
+            useContactStore.getState().addContactIfNotExists(contact);
+          });
+
+          const displayMsg: DecryptedMessage = {
+            id: uuidv4(),
+            senderPeerId,
+            content: text,
+            timestamp: Date.now(),
+            incoming: true,
+            delivered: true,
+            read: false,
+            ephemeral: false,
+            ttl: 0,
+            expiresAt: null,
+          };
+          
+          for (const cb of incomingCallbacks) cb(displayMsg);
+        } catch (err) {
+          console.error(`👻 X3DH Receiver failure from ${senderPeerId}`, err);
+        }
+      });
+      return;
     }
     
     // Rebuild RatchetMessage from wire format

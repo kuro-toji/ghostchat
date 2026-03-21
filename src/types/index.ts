@@ -35,7 +35,7 @@ export interface GhostMessage {
 }
 
 /** Message content types */
-export type MessageType = 'text' | 'key_exchange' | 'system' | 'prekey';
+export type MessageType = 'text' | 'key_exchange' | 'system' | 'prekey' | 'x3dh_initial';
 
 /** Decrypted message for UI display */
 export interface DecryptedMessage {
