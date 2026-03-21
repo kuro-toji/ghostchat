@@ -21,7 +21,7 @@ import {
   onMessage,
   type WireMessage,
 } from './protocol';
-import { getOurPeerId } from './node';
+import { useAppStore } from '../../stores';
 import type { DecryptedMessage } from '../../types';
 import {
   initHandshake,
@@ -91,7 +91,7 @@ export async function sendTextMessage(
     throw new Error(`No active session with peer — handshake required`);
   }
   
-  const ourPeerId = getOurPeerId();
+  const ourPeerId = useAppStore.getState().ourPeerId;
   if (!ourPeerId) throw new Error('Node not initialized');
   
   // Encrypt through Double Ratchet

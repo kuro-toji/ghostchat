@@ -2,6 +2,7 @@
 
 mod commands;
 mod tor;
+mod p2p;
 
 use commands::TorState;
 use tor::TorController;
@@ -21,6 +22,10 @@ pub fn run() {
             commands::get_app_info,
             commands::start_tor,
             commands::stop_tor,
+            p2p::start_p2p_node,
+            p2p::send_p2p_message,
+            p2p::dial_peer,
+            p2p::get_connected_peers,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GhostChat");

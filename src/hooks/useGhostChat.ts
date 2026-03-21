@@ -1,19 +1,7 @@
-/**
- * GhostChat — Main App Hook (LIVE MODE)
- * 
- * Orchestrates P2P initialization, Tor connection,
- * message service, and wires everything to Zustand stores.
- * 
- * Startup sequence:
- *   1. Try create libp2p node (WebRTC + WebSocket + Circuit Relay)
- *   2. If successful: register protocol, message service, DHT announcing
- *   3. If failed: graceful degradation — UI stays functional
- *   4. Attempt Tor connection (non-blocking)
- *   5. Monitor peer connections and update stores
- */
-
 import { useEffect, useRef } from 'react';
 import { useAppStore, useContactStore, useChatStore } from '../stores';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 export function useGhostChat() {
   const setTorStatus = useAppStore((s) => s.setTorStatus);
@@ -25,196 +13,97 @@ export function useGhostChat() {
   const setOnline = useContactStore((s) => s.setOnline);
   const addMessage = useChatStore((s) => s.addMessage);
 
-  // Track cleanup functions
   const cleanupRef = useRef<(() => void)[]>([]);
   const nodeStartedRef = useRef(false);
 
-  // ── 1. Node Initialization ─────────────────────────────────
   useEffect(() => {
     if (nodeStartedRef.current) return;
     nodeStartedRef.current = true;
 
     const init = async () => {
-      console.log('👻 GhostChat initializing...');
-
-      // ── Try starting the P2P node ──
-      let p2pSuccess = false;
+      console.log('👻 GhostChat initializing (IPC Backend)...');
 
       try {
         setTorStatus('bootstrapping', 10);
 
-        // ── Init DB first ──
+        // ── 1. Init DB and Identity ──
         const { initDatabase } = await import('../lib/storage/database');
         const { bytesToHex, hexToBytes, randomBytes } = await import('@noble/hashes/utils');
         const { load } = await import('@tauri-apps/plugin-store');
         
-        // Use Tauri native store for per-device key
         const store = await load('ghostchat-settings.json');
         let masterKeyHex = await store.get<string>('device_key');
         let masterKey: Uint8Array;
         
         if (!masterKeyHex) {
-          // First launch: generate 32 bytes and store it safely for this device
           masterKey = randomBytes(32);
           await store.set('device_key', bytesToHex(masterKey));
-          await store.save(); // explicitly save since autoSave option varies by version
-          console.log('👻 Generated new device master key');
+          await store.save();
         } else {
-          // Subsequent launches: load established key
           masterKey = hexToBytes(masterKeyHex);
-          console.log('👻 Loaded existing device master key');
         }
         
         await initDatabase(masterKey, 'ghostchat.db');
         setDbReady(true);
 
-        // ── Load or create persistent identity ──
         const { loadOrCreateIdentity } = await import('../lib/storage/identity-store');
         const identity = await loadOrCreateIdentity();
 
-        const {
-          createGhostNode,
-          getOurPeerId,
-          onPhaseChange,
-        } = await import('../lib/p2p/node');
+        const { initMessageService, onIncomingMessage, setOurIdentity } = await import('../lib/p2p/message-service');
+        const { registerProtocolHandler } = await import('../lib/p2p/protocol');
 
-        const {
-          startAnnouncing,
-          getConnectedPeerCount,
-          onPeerDiscovered,
-        } = await import('../lib/p2p/peer-discovery');
-
-        const {
-          onConnectionChange,
-        } = await import('../lib/p2p/connections');
-
-        const {
-          registerProtocolHandler,
-        } = await import('../lib/p2p/protocol');
-
-        const {
-          initMessageService,
-          onIncomingMessage,
-          setOurIdentity,
-        } = await import('../lib/p2p/message-service');
-
-        // Provide identity to message service for handshakes
         setOurIdentity(identity);
 
-        // Create the node with persistent identity
+        // Wait to make sure Tor starts if needed (we still init Tor for anonymous outbound traffic)
+        // attemptTor is non-blocking in the background
+        attemptTor(setTorStatus);
+
+        // ── 2. Start Rust P2P Node ──
         setTorStatus('bootstrapping', 30);
-        await createGhostNode({
-          torEnabled: false,
-          enableMdns: true,
-          allowClearnetBootstrap: true,
-          identityPrivateKey: identity.privateKey,
-        });
-
-        // Set our real PeerID
-        const ourPeerId = getOurPeerId();
-        if (ourPeerId) {
-          setOurPeerId(ourPeerId);
-          console.log('👻 Our PeerID:', ourPeerId);
-        }
-
+        console.log('👻 Invoking start_p2p_node on backend...');
+        const ourPeerId = await invoke<string>('start_p2p_node');
+        
+        setOurPeerId(ourPeerId);
         setNodeOnline(true);
-        p2pSuccess = true;
+        console.log('👻 Backend node started. Our PeerID:', ourPeerId);
 
-        // Register protocol handler
-        try {
-          await registerProtocolHandler();
-          console.log('👻 Protocol handler registered');
-        } catch (err) {
-          console.warn('👻 Protocol handler registration failed:', err);
-        }
+        // ── 3. Register Protocol and Listeners ──
+        await registerProtocolHandler();
+        initMessageService();
 
-        // Initialize message service
-        try {
-          initMessageService();
-          console.log('👻 Message service initialized');
-        } catch (err) {
-          console.warn('👻 Message service init failed:', err);
-        }
-
-        // Start DHT announcing
-        try {
-          await startAnnouncing();
-          console.log('👻 DHT announcing started');
-        } catch (err) {
-          console.warn('👻 DHT announce failed (expected on first run):', err);
-        }
-
-        // Monitor node phase changes
-        const unsubPhase = onPhaseChange((phase) => {
-          console.log('👻 Node phase:', phase);
-          if (phase === 'ready') {
-            setNodeOnline(true);
-          } else if (phase === 'cold_start') {
-            setNodeOnline(false);
-          }
-        });
-        cleanupRef.current.push(unsubPhase);
-
-        // Monitor peer discovery
-        const unsubDiscovery = onPeerDiscovered((peerId, addrs) => {
-          console.log(`👻 Peer discovered: ${peerId.slice(0, 20)}... (${addrs.length} addrs)`);
-          setPeerCount(getConnectedPeerCount());
-        });
-        cleanupRef.current.push(unsubDiscovery);
-
-        // Monitor connection changes
-        const unsubConnection = onConnectionChange((peerId, status) => {
-          console.log(`👻 Connection change: ${peerId.slice(0, 20)}... → ${status}`);
-          const isOnline = status === 'connected' || status === 'relayed';
-          setOnline(peerId, isOnline);
-          setPeerCount(getConnectedPeerCount());
-
-          if (isOnline) {
-            // If this peer is in our contact list but has no session, initiate handshake
-            const contacts = useContactStore.getState().contacts;
-            import('../lib/p2p/session-manager').then(({ hasActiveSession }) => {
-              if (contacts.find(c => c.peerId === peerId) && !hasActiveSession(peerId)) {
-                dialContactInBackground(peerId);
-              }
-            });
-          }
-        });
-        cleanupRef.current.push(unsubConnection);
-
-        // Monitor incoming messages
+        // Listen for Incoming Messages (handled internally by message service)
         const unsubIncoming = onIncomingMessage((message) => {
           console.log(`👻 Incoming message from ${message.senderPeerId.slice(0, 16)}...`);
           addMessage(message);
         });
         cleanupRef.current.push(unsubIncoming);
 
-        // Peer count polling (fallback)
-        const peerCountInterval = setInterval(() => {
-          setPeerCount(getConnectedPeerCount());
-        }, 10000);
-        cleanupRef.current.push(() => clearInterval(peerCountInterval));
+        // Listen for Peer Status Changes
+        const unlistenStatus = await listen<{peer_id: string, online: boolean}>('ghostchat://peer-status', (event) => {
+          const { peer_id, online } = event.payload;
+          console.log(`👻 Peer status change: ${peer_id.slice(0, 16)}... → ${online ? 'connected' : 'disconnected'}`);
+          
+          setOnline(peer_id, online);
+          
+          if (online) {
+            const contacts = useContactStore.getState().contacts;
+            import('../lib/p2p/session-manager').then(({ hasActiveSession }) => {
+              if (contacts.find(c => c.peerId === peer_id) && !hasActiveSession(peer_id)) {
+                dialContactInBackground(peer_id); // triggers Noise handshake
+              }
+            });
+          }
+          
+          // Poll peer count via backend
+          invoke<string[]>('get_connected_peers').then(peers => setPeerCount(peers.length));
+        });
+        cleanupRef.current.push(unlistenStatus);
 
-        console.log('👻 P2P node fully initialized');
-
+        console.log('👻 P2P fully initialized (IPC Backend)');
       } catch (err) {
-        console.error('👻 P2P initialization failed:', err);
-        // Don't set error status — just mark P2P as offline but keep app working
+        console.error('👻 Initialization failed:', err);
         setNodeOnline(false);
-        p2pSuccess = false;
       }
-
-      // ── Generate PeerID if P2P failed ──
-      if (!p2pSuccess) {
-        // Generate a local identity so the UI works
-        const fallbackId = '12D3KooW' + Array.from(crypto.getRandomValues(new Uint8Array(16)))
-          .map(b => b.toString(36).padStart(2, '0')).join('').slice(0, 30);
-        setOurPeerId(fallbackId);
-        setNodeOnline(false);
-        console.warn('👻 Running in LOCAL MODE — P2P not available, UI still functional');
-      }
-
-      // ── Attempt Tor connection (non-blocking) ──
-      attemptTor(setTorStatus);
     };
 
     init();
@@ -228,7 +117,7 @@ export function useGhostChat() {
     };
   }, []);
 
-  // ── 2. Event Handlers (send message, add contact) ──────────
+  // ── 2. Event Handlers ──────────
   useEffect(() => {
     const handleSend = async (e: CustomEvent) => {
       const { text, ephemeral, ttl } = e.detail;
@@ -236,7 +125,6 @@ export function useGhostChat() {
       
       if (!currentPeerId || !text) return;
 
-      // Build display message first (always show it locally)
       const displayMsg = {
         id: crypto.randomUUID(),
         senderPeerId: useAppStore.getState().ourPeerId ?? 'unknown',
@@ -250,13 +138,13 @@ export function useGhostChat() {
         expiresAt: ttl ? Date.now() + ttl : null,
       };
 
-      // Try to send via P2P
       try {
         const { hasActiveSession } = await import('../lib/p2p/session-manager');
-        const { isNodeRunning } = await import('../lib/p2p/node');
+        const nodeOnline = useAppStore.getState().nodeOnline;
         
-        if (isNodeRunning() && hasActiveSession(currentPeerId)) {
+        if (nodeOnline && hasActiveSession(currentPeerId)) {
           const { sendTextMessage } = await import('../lib/p2p/message-service');
+          
           const msg = await sendTextMessage(currentPeerId, text, { ephemeral, ttl });
           addMessage(msg);
           console.log('👻 Message sent to', currentPeerId.slice(0, 16) + '...');
@@ -266,7 +154,6 @@ export function useGhostChat() {
         console.warn('👻 P2P send failed:', err);
       }
 
-      // Show locally (peer offline or no active session)
       displayMsg.delivered = false;
       addMessage(displayMsg);
       console.log('👻 Message queued locally for', currentPeerId.slice(0, 16) + '...');
@@ -287,7 +174,6 @@ export function useGhostChat() {
         online: false,
       });
 
-      // Try to dial the peer in the background
       dialContactInBackground(peerId);
     };
 
@@ -303,26 +189,14 @@ export function useGhostChat() {
   return { setTorStatus, setNodeOnline, setPeerCount, setOurPeerId };
 }
 
-// ── Helpers ────────────────────────────────────────────────────
-
-/**
- * Attempt Tor connection via Tauri IPC.
- * Non-blocking — if Tor isn't available, we stay on clearnet.
- */
 async function attemptTor(
   setTorStatus: (status: 'inactive' | 'bootstrapping' | 'connected' | 'error', progress?: number) => void
 ): Promise<void> {
   try {
-    // Check if we're running inside Tauri
     const { invoke } = await import('@tauri-apps/api/core');
-    
     setTorStatus('bootstrapping', 20);
-    
-    // Start Tor sidecar
     await invoke('start_tor');
-    console.log('👻 Tor start command sent');
     
-    // Poll for bootstrap completion
     const maxWait = 90000;
     const pollInterval = 2000;
     const startTime = Date.now();
@@ -338,61 +212,37 @@ async function attemptTor(
         }>('get_tor_status');
         
         setTorStatus('bootstrapping', status.bootstrap_progress);
-        
         if (status.state === 'connected') {
           setTorStatus('connected', 100);
           console.log('👻 Tor connected! Onion:', status.onion_address);
           return;
         }
-        
         if (status.state === 'error') {
-          console.warn('👻 Tor error, running clearnet');
           setTorStatus('inactive');
           return;
         }
-      } catch {
-        // Status check failed
-      }
-      
+      } catch {}
       await new Promise(r => setTimeout(r, pollInterval));
     }
-    
-    console.warn('👻 Tor bootstrap timed out, running clearnet');
     setTorStatus('inactive');
-    
   } catch {
-    // Not running in Tauri or Tor not available — this is normal
-    console.log('👻 Tor not available — running clearnet mode');
     setTorStatus('inactive');
   }
 }
 
-/**
- * Attempt to dial a newly-added contact in the background.
- */
 async function dialContactInBackground(peerId: string): Promise<void> {
   try {
-    const { isNodeRunning } = await import('../lib/p2p/node');
-    if (!isNodeRunning()) return;
-    
-    const { dialWithRetry } = await import('../lib/p2p/connections');
-    console.log(`👻 Dialing contact ${peerId.slice(0, 16)}...`);
-    
-    await dialWithRetry(peerId);
-    console.log(`👻 Connected to contact ${peerId.slice(0, 16)}...`);
+    console.log(`👻 Triggering backend dial for ${peerId.slice(0, 16)}...`);
+    await invoke('dial_peer', { peerId });
 
-    // Trigger Noise XX handshake → initializes Double Ratchet
     const { createSession } = await import('../lib/p2p/session-manager');
     const { sendHandshakeInitiation } = await import('../lib/p2p/message-service');
     const { loadOrCreateIdentity } = await import('../lib/storage/identity-store');
     
     createSession(peerId);
-    
-    // Start Handshake: Send Noise Message 1
     const identity = await loadOrCreateIdentity();
     await sendHandshakeInitiation(peerId, identity.privateKey, identity.publicKey);
-    
   } catch (err) {
-    console.warn(`👻 Could not reach contact ${peerId.slice(0, 16)}... (they may be offline):`, err);
+    console.warn(`👻 Could not handshake with contact ${peerId.slice(0, 16)}...`, err);
   }
 }
