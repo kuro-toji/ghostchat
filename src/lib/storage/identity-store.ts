@@ -27,11 +27,15 @@ async function setSetting(key: string, value: string): Promise<void> {
   );
 }
 
+let cachedIdentity: IdentityKeyPair | null = null;
+
 /**
  * Load identity from DB, or generate + persist a new one.
  * Call once on startup before creating the libp2p node.
  */
 export async function loadOrCreateIdentity(): Promise<IdentityKeyPair> {
+  if (cachedIdentity) return cachedIdentity;
+
   const pubHex = await getSetting(KEY_PUB);
 
   if (pubHex) {
@@ -45,19 +49,25 @@ export async function loadOrCreateIdentity(): Promise<IdentityKeyPair> {
       return createAndSaveIdentity();
     }
 
-    const encKey    = hexToBytes(encKeyHex);
-    const privBytes = decrypt(
-      { ciphertext: hexToBytes(privEncHex), nonce: hexToBytes(nonceHex) },
-      encKey
-    );
+    try {
+      const encKey    = hexToBytes(encKeyHex);
+      const privBytes = decrypt(
+        { ciphertext: hexToBytes(privEncHex), nonce: hexToBytes(nonceHex) },
+        encKey
+      );
 
-    const identity: IdentityKeyPair = {
-      privateKey: privBytes,
-      publicKey:  hexToBytes(pubHex),
-    };
+      const identity: IdentityKeyPair = {
+        privateKey: privBytes,
+        publicKey:  hexToBytes(pubHex),
+      };
 
-    console.log('👻 Identity loaded from storage');
-    return identity;
+      console.log('👻 Identity loaded from storage');
+      cachedIdentity = identity;
+      return identity;
+    } catch (err) {
+      console.warn('👻 Identity decryption failed (likely memory-mode/Store mismatch) — regenerating');
+      return createAndSaveIdentity();
+    }
   }
 
   return createAndSaveIdentity();

@@ -46,11 +46,21 @@ export function SettingsModal() {
         const status = await invoke<{ state: string; bootstrap_progress: number }>('get_tor_status');
         setTorStatus('bootstrapping', status.bootstrap_progress);
         if (status.state === 'connected') {
-          setTorStatus('connected', 100);
+          setTorStatus('connected', 80);
           break;
         }
         await new Promise(r => setTimeout(r, 2000));
       }
+
+      // Restart the P2P node to route through Tor
+      const { loadOrCreateIdentity } = await import('../lib/storage/identity-store');
+      const identity = await loadOrCreateIdentity();
+      const { bytesToHex } = await import('@noble/hashes/utils');
+      
+      await invoke('stop_p2p_node');
+      await invoke('start_p2p_node', { identityKeyHex: bytesToHex(identity.privateKey) });
+      setTorStatus('connected', 100);
+
     } catch (err) {
       console.error('Failed to enable Tor:', err);
       setTorStatus('inactive');
@@ -64,6 +74,15 @@ export function SettingsModal() {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('stop_tor');
+      
+      // Restart the P2P node without Tor
+      const { loadOrCreateIdentity } = await import('../lib/storage/identity-store');
+      const identity = await loadOrCreateIdentity();
+      const { bytesToHex } = await import('@noble/hashes/utils');
+      
+      await invoke('stop_p2p_node');
+      await invoke('start_p2p_node', { identityKeyHex: bytesToHex(identity.privateKey) });
+
       setTorStatus('inactive');
     } catch (err) {
       console.error('Failed to disable Tor:', err);

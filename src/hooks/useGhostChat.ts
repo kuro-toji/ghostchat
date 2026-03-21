@@ -92,7 +92,13 @@ export function useGhostChat() {
             import('../lib/p2p/session-manager').then(({ hasActiveSession }) => {
               const contact = contacts.find(c => c.peerId === peer_id);
               if (contact && !hasActiveSession(peer_id)) {
-                dialContactInBackground(peer_id, contact.multiaddr ?? null);
+                // Tie-breaker: Only the peer with the lexicographically smaller PeerID initiates
+                if (ourPeerId && ourPeerId < peer_id) {
+                  console.log(`👻 Handshake tie-breaker: Initiating (we are smaller)`);
+                  dialContactInBackground(peer_id, contact.multiaddr ?? null);
+                } else {
+                  console.log(`👻 Handshake tie-breaker: Waiting for remote to initiate`);
+                }
               }
             });
           }
