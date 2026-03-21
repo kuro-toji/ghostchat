@@ -1,4 +1,0 @@
-src/lib/p2p/node.ts(134,33): error TS2345: Argument of type 'PrivateKey' is not assignable to parameter of type 'PrivateKey<KeyType>'.
-  Type 'RSAPrivateKey' is missing the following properties from type 'PrivateKey<KeyType>': public, bytes, marshal, hash, and 2 more.
-src/lib/p2p/node.ts(134,68): error TS2554: Expected 1 arguments, but got 2.
-src/lib/p2p/x3dh.ts(45,5): error TS6133: 'localPreKeyState' is declared but its value is never read.

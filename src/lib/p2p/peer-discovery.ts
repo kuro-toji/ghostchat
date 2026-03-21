@@ -178,6 +178,14 @@ async function announceToNetwork(): Promise<void> {
   const node = getNode();
   if (!node) return;
   
+  try {
+    // Actually provide our address to the DHT
+    // @ts-ignore - dht service typing might be missing
+    await node.services.dht.provide(node.peerId.toBytes());
+  } catch (err) {
+    console.warn('DHT announce failed:', err);
+  }
+
   // The DHT automatically announces our presence through
   // the routing table refresh mechanism.
   // We can also explicitly provide content to make ourselves findable.

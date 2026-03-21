@@ -98,6 +98,10 @@ export async function sendWireMessage(
   recipientPeerId: string,
   message: WireMessage
 ): Promise<void> {
+  // Ensure connected first
+  const { dialWithRetry } = await import('./connections');
+  await dialWithRetry(recipientPeerId); // no-op if already connected
+
   const stream = await openStream(recipientPeerId, GHOSTCHAT_PROTOCOL);
   
   try {

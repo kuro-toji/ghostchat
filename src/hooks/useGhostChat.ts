@@ -44,8 +44,10 @@ export function useGhostChat() {
         setTorStatus('bootstrapping', 10);
 
         // ── Init DB first ──
-        const { initMemoryDatabase } = await import('../lib/storage/database');
-        await initMemoryDatabase(); // swap for initDatabase(masterKey) later
+        const { initDatabase } = await import('../lib/storage/database');
+        const defaultMasterKey = new Uint8Array(32);
+        defaultMasterKey.fill(42); // Default static key for now
+        await initDatabase(defaultMasterKey, 'ghostchat.db');
         setDbReady(true);
 
         // ── Load or create persistent identity ──
@@ -148,6 +150,16 @@ export function useGhostChat() {
           const isOnline = status === 'connected' || status === 'relayed';
           setOnline(peerId, isOnline);
           setPeerCount(getConnectedPeerCount());
+
+          if (isOnline) {
+            // If this peer is in our contact list but has no session, initiate handshake
+            const contacts = useContactStore.getState().contacts;
+            import('../lib/p2p/session-manager').then(({ hasActiveSession }) => {
+              if (contacts.find(c => c.peerId === peerId) && !hasActiveSession(peerId)) {
+                dialContactInBackground(peerId);
+              }
+            });
+          }
         });
         cleanupRef.current.push(unsubConnection);
 
