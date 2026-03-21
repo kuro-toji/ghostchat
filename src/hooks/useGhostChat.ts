@@ -48,8 +48,8 @@ export function useGhostChat() {
         const { bytesToHex, hexToBytes, randomBytes } = await import('@noble/hashes/utils');
         const { load } = await import('@tauri-apps/plugin-store');
         
-        // Use a securely random per-device key for database encryption
-        const store = await load('ghostchat-settings.json', { autoSave: true });
+        // Use Tauri native store for per-device key
+        const store = await load('ghostchat-settings.json');
         let masterKeyHex = await store.get<string>('device_key');
         let masterKey: Uint8Array;
         
@@ -57,6 +57,7 @@ export function useGhostChat() {
           // First launch: generate 32 bytes and store it safely for this device
           masterKey = randomBytes(32);
           await store.set('device_key', bytesToHex(masterKey));
+          await store.save(); // explicitly save since autoSave option varies by version
           console.log('👻 Generated new device master key');
         } else {
           // Subsequent launches: load established key
