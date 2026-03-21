@@ -47,10 +47,11 @@ pub enum SwarmCommand {
     },
 }
 
-#[derive(Clone)]
+use std::sync::Mutex;
+
 pub struct P2PState {
-    pub command_sender: mpsc::Sender<SwarmCommand>,
-    pub local_peer_id: String,
+    pub command_sender: Mutex<Option<mpsc::Sender<SwarmCommand>>>,
+    pub local_peer_id: Mutex<String>,
 }
 
 // ─── Network Behaviour ──────────────────────────────────────
@@ -262,7 +263,10 @@ pub fn create_swarm(
 #[tauri::command]
 pub async fn start_p2p_node(app: AppHandle, identity_key_hex: String) -> Result<String, String> {
     if let Some(state) = app.try_state::<P2PState>() {
-        return Ok(state.local_peer_id.clone());
+        let is_running = state.command_sender.lock().unwrap().is_some();
+        if is_running {
+            return Ok(state.local_peer_id.lock().unwrap().clone());
+        }
     }
 
     // Decode the Ed25519 private key from the frontend
@@ -276,10 +280,16 @@ pub async fn start_p2p_node(app: AppHandle, identity_key_hex: String) -> Result<
     let local_peer_id = swarm.local_peer_id().to_string();
 
     let (command_sender, command_receiver) = mpsc::channel(100);
-    app.manage(P2PState { 
-        command_sender,
-        local_peer_id: local_peer_id.clone(),
-    });
+    
+    if let Some(state) = app.try_state::<P2PState>() {
+        *state.command_sender.lock().unwrap() = Some(command_sender);
+        *state.local_peer_id.lock().unwrap() = local_peer_id.clone();
+    } else {
+        app.manage(P2PState { 
+            command_sender: Mutex::new(Some(command_sender)),
+            local_peer_id: Mutex::new(local_peer_id.clone()),
+        });
+    }
 
     tauri::async_runtime::spawn(run_swarm(swarm, command_receiver, app.clone()));
 
@@ -295,15 +305,18 @@ pub async fn send_p2p_message(
     let peer_id = PeerId::from_str(&peer_id).map_err(|e| e.to_string())?;
     let (responder, receiver) = oneshot::channel();
 
-    state
-        .command_sender
-        .send(SwarmCommand::SendMessage {
+    let sender = state.command_sender.lock().unwrap().clone();
+    if let Some(s) = sender {
+        s.send(SwarmCommand::SendMessage {
             peer_id,
             ciphertext,
             responder,
         })
         .await
         .map_err(|e| e.to_string())?;
+    } else {
+        return Err("Node offline".into());
+    }
 
     receiver.await.map_err(|e| e.to_string())?
 }
@@ -322,15 +335,18 @@ pub async fn dial_peer(
 
     let (responder, receiver) = oneshot::channel();
 
-    state
-        .command_sender
-        .send(SwarmCommand::Dial {
+    let sender = state.command_sender.lock().unwrap().clone();
+    if let Some(s) = sender {
+        s.send(SwarmCommand::Dial {
             peer_id,
             multiaddr,
             responder,
         })
         .await
         .map_err(|e| e.to_string())?;
+    } else {
+        return Err("Node offline".into());
+    }
 
     receiver.await.map_err(|e| e.to_string())?
 }
@@ -339,11 +355,14 @@ pub async fn dial_peer(
 pub async fn get_connected_peers(state: State<'_, P2PState>) -> Result<Vec<String>, String> {
     let (responder, receiver) = oneshot::channel();
 
-    state
-        .command_sender
-        .send(SwarmCommand::GetPeers { responder })
-        .await
-        .map_err(|e| e.to_string())?;
+    let sender = state.command_sender.lock().unwrap().clone();
+    if let Some(s) = sender {
+        s.send(SwarmCommand::GetPeers { responder })
+            .await
+            .map_err(|e| e.to_string())?;
+    } else {
+        return Err("Node offline".into());
+    }
 
     receiver.await.map_err(|e| e.to_string())
 }
@@ -351,11 +370,15 @@ pub async fn get_connected_peers(state: State<'_, P2PState>) -> Result<Vec<Strin
 #[tauri::command]
 pub async fn get_listen_addrs(state: State<'_, P2PState>) -> Result<Vec<String>, String> {
     let (responder, receiver) = oneshot::channel();
-    state
-        .command_sender
-        .send(SwarmCommand::GetListenAddrs { responder })
-        .await
-        .map_err(|e| e.to_string())?;
+    
+    let sender = state.command_sender.lock().unwrap().clone();
+    if let Some(s) = sender {
+        s.send(SwarmCommand::GetListenAddrs { responder })
+            .await
+            .map_err(|e| e.to_string())?;
+    } else {
+        return Err("Node offline".into());
+    }
 
     let addrs = receiver.await.map_err(|e| e.to_string())?;
     
@@ -375,7 +398,7 @@ pub async fn get_listen_addrs(state: State<'_, P2PState>) -> Result<Vec<String>,
 }
 
 #[tauri::command]
-pub async fn stop_p2p_node(app: AppHandle) -> Result<(), String> {
-    app.unmanage::<P2PState>();
+pub async fn stop_p2p_node(state: State<'_, P2PState>) -> Result<(), String> {
+    *state.command_sender.lock().unwrap() = None;
     Ok(())
 }
