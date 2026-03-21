@@ -45,9 +45,24 @@ export function useGhostChat() {
 
         // ── Init DB first ──
         const { initDatabase } = await import('../lib/storage/database');
-        const defaultMasterKey = new Uint8Array(32);
-        defaultMasterKey.fill(42); // Default static key for now
-        await initDatabase(defaultMasterKey, 'ghostchat.db');
+        const { bytesToHex, hexToBytes, randomBytes } = await import('@noble/hashes/utils');
+        
+        // Use a securely random per-device key for database encryption
+        let masterKeyHex = localStorage.getItem('ghostchat_device_key');
+        let masterKey: Uint8Array;
+        
+        if (!masterKeyHex) {
+          // First launch: generate 32 bytes and store it safely for this device
+          masterKey = randomBytes(32);
+          localStorage.setItem('ghostchat_device_key', bytesToHex(masterKey));
+          console.log('👻 Generated new device master key');
+        } else {
+          // Subsequent launches: load established key
+          masterKey = hexToBytes(masterKeyHex);
+          console.log('👻 Loaded existing device master key');
+        }
+        
+        await initDatabase(masterKey, 'ghostchat.db');
         setDbReady(true);
 
         // ── Load or create persistent identity ──
