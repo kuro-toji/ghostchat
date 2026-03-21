@@ -42,6 +42,9 @@ pub enum SwarmCommand {
     GetPeers {
         responder: oneshot::Sender<Vec<String>>,
     },
+    GetListenAddrs {
+        responder: oneshot::Sender<Vec<String>>,
+    },
 }
 
 #[derive(Clone)]
@@ -92,6 +95,12 @@ pub async fn run_swarm(
                         let peers: Vec<String> = connected_peers.iter().cloned().collect();
                         let _ = responder.send(peers);
                     }
+                    SwarmCommand::GetListenAddrs { responder } => {
+                        let addrs: Vec<String> = swarm.listeners()
+                            .map(|a| a.to_string())
+                            .collect();
+                        let _ = responder.send(addrs);
+                    }
                 }
             }
             event = swarm.select_next_some() => match event {
@@ -120,6 +129,34 @@ pub async fn run_swarm(
                         // Send an empty acknowledgement response
                         let _ = swarm.behaviour_mut().req_resp.send_response(channel, vec![]);
                     }
+                }
+                SwarmEvent::Behaviour(GhostBehaviourEvent::Mdns(
+                    mdns::Event::Discovered(peers)
+                )) => {
+                    for (peer_id, addr) in peers {
+                        println!("👻 mDNS discovered: {peer_id} at {addr}");
+                        swarm.add_peer_address(peer_id, addr);
+                    }
+                }
+                SwarmEvent::Behaviour(GhostBehaviourEvent::Mdns(
+                    mdns::Event::Expired(peers)
+                )) => {
+                    for (peer_id, _addr) in peers {
+                        println!("👻 mDNS expired: {peer_id}");
+                    }
+                }
+                SwarmEvent::Behaviour(GhostBehaviourEvent::Identify(
+                    identify::Event::Received { peer_id, info, .. }
+                )) => {
+                    for addr in &info.listen_addrs {
+                        swarm.add_peer_address(peer_id, addr.clone());
+                    }
+                    let addrs: Vec<String> = info.listen_addrs.iter().map(|a| a.to_string()).collect();
+                    let _ = app.emit("ghostchat://peer-identified", serde_json::json!({
+                        "peer_id": peer_id.to_string(),
+                        "addrs": addrs
+                    }));
+                    println!("👻 Identify received from {peer_id}: {} addrs", addrs.len());
                 }
                 SwarmEvent::NewListenAddr { address, .. } => {
                     println!("👻 Listening on {address}");
@@ -256,6 +293,19 @@ pub async fn get_connected_peers(state: State<'_, P2PState>) -> Result<Vec<Strin
     state
         .command_sender
         .send(SwarmCommand::GetPeers { responder })
+        .await
+        .map_err(|e| e.to_string())?;
+
+    receiver.await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_listen_addrs(state: State<'_, P2PState>) -> Result<Vec<String>, String> {
+    let (responder, receiver) = oneshot::channel();
+
+    state
+        .command_sender
+        .send(SwarmCommand::GetListenAddrs { responder })
         .await
         .map_err(|e| e.to_string())?;
 

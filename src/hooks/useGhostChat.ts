@@ -90,8 +90,9 @@ export function useGhostChat() {
           if (online) {
             const contacts = useContactStore.getState().contacts;
             import('../lib/p2p/session-manager').then(({ hasActiveSession }) => {
-              if (contacts.find(c => c.peerId === peer_id) && !hasActiveSession(peer_id)) {
-                dialContactInBackground(peer_id); // triggers Noise handshake
+              const contact = contacts.find(c => c.peerId === peer_id);
+              if (contact && !hasActiveSession(peer_id)) {
+                dialContactInBackground(peer_id, contact.multiaddr ?? null);
               }
             });
           }
@@ -162,7 +163,7 @@ export function useGhostChat() {
     };
 
     const handleAddContact = (e: CustomEvent) => {
-      const { peerId, displayName } = e.detail;
+      const { peerId, displayName, multiaddr } = e.detail;
       if (!peerId) return;
 
       addContact({
@@ -174,9 +175,10 @@ export function useGhostChat() {
         isVerified: false,
         defaultTtl: 0,
         online: false,
+        multiaddr: multiaddr || null,
       });
 
-      dialContactInBackground(peerId);
+      dialContactInBackground(peerId, multiaddr || null);
     };
 
     window.addEventListener('ghostchat:send', handleSend as unknown as EventListener);
@@ -232,10 +234,10 @@ async function attemptTor(
   }
 }
 
-async function dialContactInBackground(peerId: string): Promise<void> {
+async function dialContactInBackground(peerId: string, multiaddr: string | null = null): Promise<void> {
   try {
     console.log(`👻 Triggering backend dial for ${peerId.slice(0, 16)}...`);
-    await invoke('dial_peer', { peerId, multiaddr: null });
+    await invoke('dial_peer', { peerId, multiaddr });
 
     const { createSession } = await import('../lib/p2p/session-manager');
     const { sendHandshakeInitiation } = await import('../lib/p2p/message-service');

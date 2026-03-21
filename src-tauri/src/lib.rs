@@ -26,6 +26,7 @@ pub fn run() {
             p2p::send_p2p_message,
             p2p::dial_peer,
             p2p::get_connected_peers,
+            p2p::get_listen_addrs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GhostChat");

@@ -103,6 +103,8 @@ export interface Contact {
   defaultTtl: number;
   /** Online status */
   online: boolean;
+  /** Multiaddr for internet peers (null for LAN/mDNS) */
+  multiaddr: string | null;
 }
 
 // ─── Pre-Key Bundles ─────────────────────────────────────────

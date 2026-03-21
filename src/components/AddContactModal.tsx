@@ -5,21 +5,34 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, UserPlus, Copy } from 'lucide-react';
 import { useAppStore } from '../stores';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 
 export function AddContactModal() {
   const { activeModal, closeModal } = useAppStore();
   const ourPeerId = useAppStore((s) => s.ourPeerId);
   const [peerIdInput, setPeerIdInput] = useState('');
+  const [multiaddrInput, setMultiaddrInput] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [copied, setCopied] = useState(false);
+  const [listenAddrs, setListenAddrs] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (activeModal === 'add-contact') {
+      invoke<string[]>('get_listen_addrs').then(setListenAddrs).catch(() => {});
+    }
+  }, [activeModal]);
 
   if (activeModal !== 'add-contact') return null;
 
   const handleAdd = () => {
     if (!peerIdInput.trim()) return;
     window.dispatchEvent(new CustomEvent('ghostchat:add-contact', {
-      detail: { peerId: peerIdInput.trim(), displayName: displayName.trim() },
+      detail: {
+        peerId: peerIdInput.trim(),
+        displayName: displayName.trim(),
+        multiaddr: multiaddrInput.trim() || null,
+      },
     }));
     closeModal();
   };
@@ -90,6 +103,18 @@ export function AddContactModal() {
               </div>
             </div>
 
+            {/* Our Listen Addresses */}
+            {listenAddrs.length > 0 && (
+              <div className="p-3 rounded-xl bg-elevated border border-border-subtle">
+                <p className="text-[10px] text-ghost-dim font-code uppercase tracking-wider mb-1.5">Your Address — share with remote peers</p>
+                {listenAddrs.map((addr, i) => (
+                  <code key={i} className="block text-[10px] text-accent-glow/70 font-code break-all leading-relaxed">
+                    {addr}/p2p/{ourPeerId}
+                  </code>
+                ))}
+              </div>
+            )}
+
             {/* Peer ID input */}
             <div>
               <label className="text-xs text-ghost-dim font-code block mb-1.5">Contact's PeerID</label>
@@ -98,6 +123,18 @@ export function AddContactModal() {
                 value={peerIdInput}
                 onChange={(e) => setPeerIdInput(e.target.value)}
                 placeholder="Paste their PeerID here..."
+                className="w-full bg-elevated text-ghost-white text-sm px-4 py-2.5 rounded-xl border border-border-subtle focus:border-accent-glow/30 outline-none transition-all placeholder:text-ghost-dim/40 font-code"
+              />
+            </div>
+
+            {/* Multiaddr input */}
+            <div>
+              <label className="text-xs text-ghost-dim font-code block mb-1.5">Multiaddr (for internet peers, optional for LAN)</label>
+              <input
+                type="text"
+                value={multiaddrInput}
+                onChange={(e) => setMultiaddrInput(e.target.value)}
+                placeholder="/ip4/1.2.3.4/tcp/4001/p2p/12D3KooW..."
                 className="w-full bg-elevated text-ghost-white text-sm px-4 py-2.5 rounded-xl border border-border-subtle focus:border-accent-glow/30 outline-none transition-all placeholder:text-ghost-dim/40 font-code"
               />
             </div>
