@@ -1,6 +1,6 @@
 use futures::prelude::*;
 use libp2p::{
-    dcutr, identify, kad, mdns, noise, ping, relay,
+    dcutr, identify, kad, mdns, noise, ping, relay, rendezvous,
     request_response::{self, ProtocolSupport},
     swarm::{NetworkBehaviour, SwarmEvent},
     tcp, webrtc, yamux, Multiaddr, PeerId, StreamProtocol,
@@ -45,6 +45,10 @@ pub enum SwarmCommand {
     GetListenAddrs {
         responder: oneshot::Sender<Vec<String>>,
     },
+    DiscoverPeers {
+        peer_id: PeerId,
+        responder: oneshot::Sender<Result<(), String>>,
+    },
 }
 
 use std::sync::Mutex;
@@ -65,6 +69,7 @@ struct GhostBehaviour {
     relay_client: relay::client::Behaviour,
     dcutr: dcutr::Behaviour,
     kad: kad::Behaviour<kad::store::MemoryStore>,
+    rendezvous: rendezvous::client::Behaviour,
 }
 
 // ─── Swarm Event Loop ───────────────────────────────────────
@@ -75,6 +80,7 @@ pub async fn run_swarm(
     app: AppHandle,
 ) {
     let mut connected_peers: HashSet<String> = HashSet::new();
+    let rendezvous_server_peer_id = PeerId::from_str("QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN").unwrap();
 
     loop {
         tokio::select! {
@@ -115,6 +121,16 @@ pub async fn run_swarm(
                             .collect();
                         let _ = responder.send(addrs);
                     }
+                    SwarmCommand::DiscoverPeers { peer_id: _, responder } => {
+                        let ns = rendezvous::Namespace::from_static("ghostchat");
+                        swarm.behaviour_mut().rendezvous.discover(
+                            Some(ns),
+                            None,
+                            None,
+                            rendezvous_server_peer_id,
+                        );
+                        let _ = responder.send(Ok(()));
+                    }
                 }
             }
             event = swarm.select_next_some() => match event {
@@ -124,6 +140,19 @@ pub async fn run_swarm(
                         peer_id: peer_id.to_string(),
                         online: true,
                     });
+
+                    // 6. Register if it's the rendezvous server
+                    if peer_id == rendezvous_server_peer_id {
+                        if let Err(e) = swarm.behaviour_mut().rendezvous.register(
+                            rendezvous::Namespace::from_static("ghostchat"),
+                            rendezvous_server_peer_id,
+                            None,
+                        ) {
+                            println!("👻 Failed to register with rendezvous server: {:?}", e);
+                        } else {
+                            println!("👻 Sent rendezvous registration to {:?}", peer_id);
+                        }
+                    }
                 }
                 SwarmEvent::ConnectionClosed { peer_id, .. } => {
                     connected_peers.remove(&peer_id.to_string());
@@ -172,6 +201,29 @@ pub async fn run_swarm(
                 SwarmEvent::Behaviour(GhostBehaviourEvent::RelayClient(event)) => {
                     println!("👻 Relay Client event: {:?}", event);
                 }
+                SwarmEvent::Behaviour(GhostBehaviourEvent::Rendezvous(event)) => match event {
+                    rendezvous::client::Event::Registered { namespace, ttl, server } => {
+                        println!("👻 Registered with rendezvous server {:?} in namespace {:?} for {}s", server, namespace, ttl);
+                    }
+                    rendezvous::client::Event::RegisterFailed { server, namespace, error } => {
+                        println!("👻 Rendezvous register failed {:?} {:?} {:?}", server, namespace, error);
+                    }
+                    rendezvous::client::Event::Discovered { registrations, .. } => {
+                        for reg in registrations {
+                            println!("👻 Rendezvous discovered peer {:?}", reg.record.peer_id());
+                            for addr in reg.record.addresses() {
+                                swarm.add_peer_address(reg.record.peer_id(), addr.clone());
+                            }
+                            let _ = swarm.dial(reg.record.peer_id());
+                        }
+                    }
+                    rendezvous::client::Event::DiscoverFailed { server, namespace, error } => {
+                        println!("👻 Rendezvous discover failed {:?} {:?} {:?}", server, namespace, error);
+                    }
+                    rendezvous::client::Event::Expired { peer } => {
+                        println!("👻 Rendezvous peer expired {:?}", peer);
+                    }
+                },
                 SwarmEvent::NewListenAddr { address, .. } => {
                     println!("👻 Listening on {address}");
                 }
@@ -190,11 +242,6 @@ pub fn create_swarm(
 
     let (relay_transport, relay_client) = relay::client::new(local_peer_id);
     
-    let webrtc_transport = webrtc::tokio::Transport::new(
-        keypair.clone(),
-        webrtc::tokio::Certificate::generate(&mut rand::thread_rng())?,
-    );
-
     let mut swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
         .with_tokio()
         .with_tcp(
@@ -203,7 +250,14 @@ pub fn create_swarm(
             yamux::Config::default,
         )?
         .with_other_transport(|_key| relay_transport)?
-        .with_other_transport(|_key| webrtc_transport)?
+        .with_other_transport(|key| {
+            let cert = webrtc::tokio::Certificate::generate(&mut rand::thread_rng())
+                .unwrap_or_else(|_| panic!("Failed to generate WebRTC cert"));
+            Ok::<_, std::io::Error>(webrtc::tokio::Transport::new(
+                key.clone(),
+                cert,
+            ))
+        })?
         .with_dns()?
         .with_behaviour(|key: &libp2p::identity::Keypair| {
             let mut kad = kad::Behaviour::new(
@@ -232,6 +286,7 @@ pub fn create_swarm(
                 relay_client,
                 dcutr: dcutr::Behaviour::new(local_peer_id),
                 kad,
+                rendezvous: rendezvous::client::Behaviour::new(key.clone()),
             })
         })?
         .with_swarm_config(|c: libp2p::swarm::Config| c.with_idle_connection_timeout(Duration::from_secs(60)))
@@ -401,4 +456,27 @@ pub async fn get_listen_addrs(state: State<'_, P2PState>) -> Result<Vec<String>,
 pub async fn stop_p2p_node(state: State<'_, P2PState>) -> Result<(), String> {
     *state.command_sender.lock().unwrap() = None;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn discover_peers(
+    peer_id: String,
+    state: State<'_, P2PState>,
+) -> Result<(), String> {
+    let peer_id = PeerId::from_str(&peer_id).map_err(|e| e.to_string())?;
+    let (responder, receiver) = oneshot::channel();
+
+    let sender = state.command_sender.lock().unwrap().clone();
+    if let Some(s) = sender {
+        s.send(SwarmCommand::DiscoverPeers {
+            peer_id,
+            responder,
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    } else {
+        return Err("Node offline".into());
+    }
+
+    receiver.await.map_err(|e| e.to_string())?
 }

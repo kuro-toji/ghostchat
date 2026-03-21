@@ -24,6 +24,7 @@ pub fn run() {
             commands::stop_tor,
             p2p::start_p2p_node,
             p2p::stop_p2p_node,
+            p2p::discover_peers,
             p2p::send_p2p_message,
             p2p::dial_peer,
             p2p::get_connected_peers,

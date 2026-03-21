@@ -242,7 +242,18 @@ async function attemptTor(
 
 async function dialContactInBackground(peerId: string, multiaddr: string | null = null): Promise<void> {
   try {
-    console.log(`👻 Triggering backend dial for ${peerId.slice(0, 16)}...`);
+    console.log(`👻 Querying Rendezvous to discover routes for ${peerId.slice(0, 16)}...`);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('discover_peers', { peerId });
+      // Wait for the Discovered events to populate the Rust Swarm's routing tables
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    } catch (err) {
+      console.warn(`👻 Rendezvous discovery error (falling back to Kademlia/mDNS):`, err);
+    }
+
+    console.log(`👻 Triggering finalized backend dial for ${peerId.slice(0, 16)}...`);
+    const { invoke } = await import('@tauri-apps/api/core');
     await invoke('dial_peer', { peerId, multiaddr });
 
     const { createSession } = await import('../lib/p2p/session-manager');
