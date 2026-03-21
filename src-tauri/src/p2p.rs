@@ -10,7 +10,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tauri::{AppHandle, Manager, State, Emitter};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 // ─── Event Payloads ──────────────────────────────────────────
 
@@ -181,7 +181,7 @@ pub fn create_swarm(
             noise::Config::new,
             yamux::Config::default,
         )?
-        .with_behaviour(|key| {
+        .with_behaviour(|key: &libp2p::identity::Keypair| {
             Ok(GhostBehaviour {
                 ping: ping::Behaviour::default(),
                 identify: identify::Behaviour::new(identify::Config::new(
@@ -201,7 +201,7 @@ pub fn create_swarm(
                 ),
             })
         })?
-        .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
+        .with_swarm_config(|c: libp2p::swarm::Config| c.with_idle_connection_timeout(Duration::from_secs(60)))
         .build();
 
     // Listen on TCP only — works on LAN and internet without TLS headaches

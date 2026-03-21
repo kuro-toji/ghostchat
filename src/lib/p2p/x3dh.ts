@@ -27,7 +27,14 @@ import {
   type IdentityKeyPair,
   type X25519KeyPair,
 } from '../crypto';
-import { dhtPut, dhtGet } from '../p2p';
+// DHT operations are now in the Rust backend — stub until Tauri commands are added
+async function dhtPut(_key: Uint8Array, _value: Uint8Array): Promise<void> {
+  console.warn('👻 dhtPut stub — DHT put not yet wired to Rust backend');
+}
+async function dhtGet(_key: Uint8Array): Promise<Uint8Array | null> {
+  console.warn('👻 dhtGet stub — DHT get not yet wired to Rust backend');
+  return null;
+}
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import type { PreKeyBundle, SerializedPreKeyBundle } from '../../types';

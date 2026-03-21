@@ -171,6 +171,7 @@ function rowToContact(row: any): Contact {
     isVerified: row.is_verified === 1,
     defaultTtl: row.default_ttl,
     online: false,
+    multiaddr: null,
   };
 }
 

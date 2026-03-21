@@ -8,7 +8,7 @@ import { useAppStore, useChatStore } from '../stores';
 import { useState } from 'react';
 
 export function SettingsModal() {
-  const { activeModal, closeModal, torStatus, nodeOnline, ourPeerId, version, setTorStatus, setNodeOnline, setOurPeerId } = useAppStore();
+  const { activeModal, closeModal, torStatus, nodeOnline, ourPeerId, version, setTorStatus } = useAppStore();
   const [restarting, setRestarting] = useState(false);
   const [memoryOnly, setMemoryOnly] = useState(false);
   const [defaultEphemeral, setDefaultEphemeral] = useState(false);
@@ -33,88 +33,40 @@ export function SettingsModal() {
   const handleEnableTor = async () => {
     setRestarting(true);
     setTorStatus('bootstrapping', 10);
-    setNodeOnline(false);
     
     try {
-      const { createGhostNode, stopNode, getOurPeerId } = await import('../lib/p2p/node');
-      const { registerProtocolHandler } = await import('../lib/p2p/protocol');
-      const { initMessageService } = await import('../lib/p2p/message-service');
-      const { startAnnouncing } = await import('../lib/p2p/peer-discovery');
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('start_tor');
+      setTorStatus('bootstrapping', 50);
       
-      await stopNode();
-      
-      // Start Tor via Tauri IPC
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('start_tor');
-        setTorStatus('bootstrapping', 40);
-      } catch (err) {
-        console.warn('Tor sidecar start failed:', err);
+      // Poll for Tor bootstrap
+      const maxWait = 60000;
+      const startTime = Date.now();
+      while (Date.now() - startTime < maxWait) {
+        const status = await invoke<{ state: string; bootstrap_progress: number }>('get_tor_status');
+        setTorStatus('bootstrapping', status.bootstrap_progress);
+        if (status.state === 'connected') {
+          setTorStatus('connected', 100);
+          break;
+        }
+        await new Promise(r => setTimeout(r, 2000));
       }
-      
-      setTorStatus('bootstrapping', 60);
-      await createGhostNode({ torEnabled: true, enableMdns: false });
-      
-      const peerId = getOurPeerId();
-      if (peerId) setOurPeerId(peerId);
-      
-      try { await registerProtocolHandler(); } catch { /* ok */ }
-      try { initMessageService(); } catch { /* ok */ }
-      try { await startAnnouncing(); } catch { /* ok */ }
-      
-      setNodeOnline(true);
-      setTorStatus('connected', 100);
     } catch (err) {
       console.error('Failed to enable Tor:', err);
-      // Fallback: restart without Tor
-      try {
-        const { createGhostNode, stopNode, getOurPeerId } = await import('../lib/p2p/node');
-        await stopNode();
-        await createGhostNode({ torEnabled: false });
-        const peerId = getOurPeerId();
-        if (peerId) setOurPeerId(peerId);
-        setNodeOnline(true);
-        setTorStatus('inactive');
-      } catch {
-        setNodeOnline(false);
-        setTorStatus('inactive');
-      }
+      setTorStatus('inactive');
     }
     setRestarting(false);
   };
 
   const handleDisableTor = async () => {
     setRestarting(true);
-    setTorStatus('bootstrapping', 10);
-    setNodeOnline(false);
     
     try {
-      const { createGhostNode, stopNode, getOurPeerId } = await import('../lib/p2p/node');
-      const { registerProtocolHandler } = await import('../lib/p2p/protocol');
-      const { initMessageService } = await import('../lib/p2p/message-service');
-      const { startAnnouncing } = await import('../lib/p2p/peer-discovery');
-      
-      // Stop Tor sidecar
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('stop_tor');
-      } catch { /* ok */ }
-      
-      await stopNode();
-      await createGhostNode({ torEnabled: false, enableMdns: true });
-      
-      const peerId = getOurPeerId();
-      if (peerId) setOurPeerId(peerId);
-      
-      try { await registerProtocolHandler(); } catch { /* ok */ }
-      try { initMessageService(); } catch { /* ok */ }
-      try { await startAnnouncing(); } catch { /* ok */ }
-      
-      setNodeOnline(true);
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('stop_tor');
       setTorStatus('inactive');
     } catch (err) {
       console.error('Failed to disable Tor:', err);
-      setNodeOnline(false);
       setTorStatus('inactive');
     }
     setRestarting(false);
