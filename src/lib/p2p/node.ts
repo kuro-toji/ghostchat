@@ -135,8 +135,10 @@ export async function createGhostNode(
       : undefined;
 
     node = await createLibp2p({
-      // @ts-ignore — `peerId` is historically present in createLibp2p options depending on exact version combination
+      // @ts-ignore — `peerId` is historically present, newer versions use `privateKey`
       peerId,
+      // @ts-ignore
+      privateKey: peerId?.privateKey,
       addresses: {
         listen: addresses,
       },
