@@ -80,7 +80,7 @@ pub async fn run_swarm(
     app: AppHandle,
 ) {
     let mut connected_peers: HashSet<String> = HashSet::new();
-    let rendezvous_server_peer_id = PeerId::from_str("QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN").unwrap();
+    let rendezvous_server_peer_id = PeerId::from_str("QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt").unwrap();
 
     loop {
         tokio::select! {
@@ -300,6 +300,7 @@ pub fn create_swarm(
     let bootnodes = [
         ("QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN", "/dnsaddr/bootstrap.libp2p.io"),
         ("QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXBPxS8GWxghW", "/dnsaddr/bootstrap.libp2p.io"),
+        ("QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt", "/ip4/147.75.109.213/tcp/4001"),
     ];
     for (peer_str, addr_str) in bootnodes {
         if let (Ok(peer_id), Ok(addr)) = (peer_str.parse::<PeerId>(), addr_str.parse::<Multiaddr>()) {
