@@ -3,7 +3,7 @@ use libp2p::{
     dcutr, identify, kad, mdns, noise, ping, relay, rendezvous,
     request_response::{self, ProtocolSupport},
     swarm::{NetworkBehaviour, SwarmEvent},
-    tcp, webrtc, yamux, Multiaddr, PeerId, StreamProtocol,
+    tcp, yamux, Multiaddr, PeerId, StreamProtocol,
 };
 use std::collections::HashSet;
 use std::str::FromStr;
@@ -299,12 +299,6 @@ pub fn create_swarm(
 ) -> Result<libp2p::Swarm<GhostBehaviour>, Box<dyn std::error::Error>> {
     let local_peer_id = PeerId::from(keypair.public());
 
-    let (relay_transport, relay_client) = relay::client::new(local_peer_id);
-    let webrtc_transport = webrtc::tokio::Transport::new(
-        keypair.clone(),
-        webrtc::tokio::Certificate::generate(&mut rand::thread_rng()).map_err(|e| e.to_string())?,
-    );
-
     let mut swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
         .with_tokio()
         .with_tcp(
@@ -313,10 +307,12 @@ pub fn create_swarm(
             yamux::Config::default,
         )?
         .with_quic()
-        .with_other_transport(|_key| relay_transport)?
-        .with_other_transport(|_key| webrtc_transport)?
         .with_dns()?
-        .with_behaviour(|key: &libp2p::identity::Keypair| {
+        .with_relay_client(
+            noise::Config::new,
+            yamux::Config::default,
+        )?
+        .with_behaviour(|key: &libp2p::identity::Keypair, relay_client| {
             let mut kad = kad::Behaviour::new(
                 local_peer_id,
                 kad::store::MemoryStore::new(local_peer_id),
@@ -352,12 +348,17 @@ pub fn create_swarm(
     // Listen on TCP and WebRTC UDP so peers can hole-punch
     if use_tor {
         println!("👻 Tor mode active! Restricting incoming TCP to 127.0.0.1 for Hidden Service");
-        swarm.listen_on("/ip4/127.0.0.1/tcp/4001".parse()?)?;
+        if let Err(e) = swarm.listen_on("/ip4/127.0.0.1/tcp/4001".parse()?) {
+            println!("👻 ⚠️ Tor Port Binding Failed: {}", e);
+        }
     } else {
         println!("👻 Normal mode active. Listening publicly.");
-        swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
-        swarm.listen_on("/ip4/0.0.0.0/udp/0/webrtc-direct".parse()?)?;
-        swarm.listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse()?)?;
+        if let Err(e) = swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?) {
+            println!("👻 ⚠️ TCP Listener Binding Failed: {}", e);
+        }
+        if let Err(e) = swarm.listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse()?) {
+            println!("👻 ⚠️ QUIC Listener Binding Failed: {}", e);
+        }
     }
 
     // Add bootstrap nodes to routing table and relay list

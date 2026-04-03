@@ -33,6 +33,7 @@ export function SettingsModal() {
   const handleEnableTor = async () => {
     setRestarting(true);
     setTorStatus('bootstrapping', 10);
+    localStorage.setItem('ghostchat_use_tor', 'true');
     
     try {
       const { invoke } = await import('@tauri-apps/api/core');
@@ -70,6 +71,7 @@ export function SettingsModal() {
 
   const handleDisableTor = async () => {
     setRestarting(true);
+    localStorage.removeItem('ghostchat_use_tor');
     
     try {
       const { invoke } = await import('@tauri-apps/api/core');

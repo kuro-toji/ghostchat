@@ -76,26 +76,47 @@ export function useGhostChat() {
 
         // Wait to make sure Tor starts if needed (we still init Tor for anonymous outbound traffic)
         // attemptTor is non-blocking in the background
-        attemptTor(setTorStatus);
+        let useTorSetting = localStorage.getItem('ghostchat_use_tor') === 'true';
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          // If Tor is explicitly enabled in some persistent storage, we'd use it here.
+          // For now, respect the user's request: "tor should be an option or choice"
+          // We will NOT initialize Tor by default unless explicitly asked.
+          // By default, Tor is off to resolve the stuck at 10% issue during boot.
+          if (useTorSetting) {
+            attemptTor(setTorStatus); 
+          }
+        } catch (e) {
+          console.error('Failed to resolve Tor preference:', e);
+        }
 
         // ── 2. Start Rust P2P Node (with same identity key) ──
-        setTorStatus('bootstrapping', 30);
+        if (!useTorSetting) {
+          setTorStatus('inactive');
+        }
         console.log('👻 Invoking start_p2p_node on backend...');
-        const ourPeerId = await invoke<string>('start_p2p_node', {
-          identityKeyHex: bytesToHex(identity.privateKey),
-          useTor: false
-        });
         
-        setOurPeerId(ourPeerId);
-        setNodeOnline(true);
-        console.log('👻 Backend node started. Our PeerID:', ourPeerId);
-
-        // Step 1: Publish X3DH prekey bundle to DHT
-        import('../lib/p2p/x3dh').then(({ publishPreKeyBundle }) => {
-          publishPreKeyBundle(identity, ourPeerId).catch(err => {
-            console.error('👻 Failed to publish X3DH PreKeys:', err);
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          const ourPeerId = await invoke<string>('start_p2p_node', {
+            identityKeyHex: bytesToHex(identity.privateKey),
+            useTor: useTorSetting
           });
-        });
+          
+          setOurPeerId(ourPeerId);
+          setNodeOnline(true);
+          console.log('👻 Backend node started. Our PeerID:', ourPeerId);
+
+          // Step 1: Publish X3DH prekey bundle to DHT
+          import('../lib/p2p/x3dh').then(({ publishPreKeyBundle }) => {
+            publishPreKeyBundle(identity, ourPeerId).catch(err => {
+              console.error('👻 Failed to publish X3DH PreKeys:', err);
+            });
+          });
+        } catch (err) {
+          console.error("❌ CRITICAL: Failed to start P2P node:", err);
+          // Set peer ID to error or retry?
+        }
 
         // ── 3. Register Protocol and Listeners ──
         await registerProtocolHandler();

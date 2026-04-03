@@ -17,6 +17,7 @@ pub fn run() {
             {
                 use tauri::Manager;
                 if let Some(window) = app.get_webview_window("main") {
+                    #[cfg(any(windows, target_os = "macos"))]
                     let _ = window.set_prevent_capture(true);
                 }
             }
