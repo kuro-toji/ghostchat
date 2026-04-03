@@ -295,6 +295,7 @@ pub async fn run_swarm(
 
 pub fn create_swarm(
     keypair: libp2p::identity::Keypair,
+    use_tor: bool,
 ) -> Result<libp2p::Swarm<GhostBehaviour>, Box<dyn std::error::Error>> {
     let local_peer_id = PeerId::from(keypair.public());
 
@@ -349,8 +350,15 @@ pub fn create_swarm(
         .build();
 
     // Listen on TCP and WebRTC UDP so peers can hole-punch
-    swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
-    swarm.listen_on("/ip4/0.0.0.0/udp/0/webrtc-direct".parse()?)?;
+    if use_tor {
+        println!("👻 Tor mode active! Restricting incoming TCP to 127.0.0.1 for Hidden Service");
+        swarm.listen_on("/ip4/127.0.0.1/tcp/4001".parse()?)?;
+    } else {
+        println!("👻 Normal mode active. Listening publicly.");
+        swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
+        swarm.listen_on("/ip4/0.0.0.0/udp/0/webrtc-direct".parse()?)?;
+        swarm.listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse()?)?;
+    }
 
     // Add bootstrap nodes to routing table and relay list
     let bootnodes = [
@@ -376,7 +384,7 @@ pub fn create_swarm(
 // ─── Tauri Commands ─────────────────────────────────────────
 
 #[tauri::command]
-pub async fn start_p2p_node(app: AppHandle, identity_key_hex: String) -> Result<String, String> {
+pub async fn start_p2p_node(app: AppHandle, identity_key_hex: String, use_tor: bool) -> Result<String, String> {
     if let Some(state) = app.try_state::<P2PState>() {
         let is_running = state.command_sender.lock().unwrap().is_some();
         if is_running {
@@ -391,7 +399,7 @@ pub async fn start_p2p_node(app: AppHandle, identity_key_hex: String) -> Result<
     let ed_keypair = libp2p::identity::ed25519::Keypair::from(secret_key);
     let keypair = libp2p::identity::Keypair::from(ed_keypair);
 
-    let swarm = create_swarm(keypair).map_err(|e| e.to_string())?;
+    let swarm = create_swarm(keypair, use_tor).map_err(|e| e.to_string())?;
     let local_peer_id = swarm.local_peer_id().to_string();
 
     let (command_sender, command_receiver) = mpsc::channel(100);

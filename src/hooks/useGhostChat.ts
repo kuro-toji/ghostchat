@@ -83,6 +83,7 @@ export function useGhostChat() {
         console.log('👻 Invoking start_p2p_node on backend...');
         const ourPeerId = await invoke<string>('start_p2p_node', {
           identityKeyHex: bytesToHex(identity.privateKey),
+          useTor: false
         });
         
         setOurPeerId(ourPeerId);

@@ -58,7 +58,7 @@ export function SettingsModal() {
       const { bytesToHex } = await import('@noble/hashes/utils');
       
       await invoke('stop_p2p_node');
-      await invoke('start_p2p_node', { identityKeyHex: bytesToHex(identity.privateKey) });
+      await invoke('start_p2p_node', { identityKeyHex: bytesToHex(identity.privateKey), useTor: true });
       setTorStatus('connected', 100);
 
     } catch (err) {
@@ -81,8 +81,7 @@ export function SettingsModal() {
       const { bytesToHex } = await import('@noble/hashes/utils');
       
       await invoke('stop_p2p_node');
-      await invoke('start_p2p_node', { identityKeyHex: bytesToHex(identity.privateKey) });
-
+      await invoke('start_p2p_node', { identityKeyHex: bytesToHex(identity.privateKey), useTor: false });
       setTorStatus('inactive');
     } catch (err) {
       console.error('Failed to disable Tor:', err);
