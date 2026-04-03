@@ -8,6 +8,7 @@ import { GhostLogo } from './GhostLogo';
 import { ContactItem } from './ContactItem';
 import { Identicon } from './Identicon';
 import { useAppStore, useContactStore } from '../stores';
+import { NetworkStatusPanel } from './NetworkStatusPanel';
 
 export function Sidebar() {
   const { torStatus, ourPeerId, openModal, peerCount } = useAppStore();
@@ -95,6 +96,7 @@ export function Sidebar() {
           <div className="text-ghost-dim/40 text-[10px] font-code">{peerCount}p</div>
         </div>
       </div>
+      <NetworkStatusPanel />
     </motion.aside>
   );
 }

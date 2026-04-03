@@ -218,26 +218,22 @@ pub async fn run_swarm(
                         "addrs": addrs
                     }));
                 }
-                SwarmEvent::Behaviour(GhostBehaviourEvent::Kad(kad::Event::OutboundQueryProgressed { result, .. })) => {
-                    if let kad::QueryResult::GetClosestPeers(Ok(ok)) = result {
-                        for peer in ok.peers {
                 SwarmEvent::Behaviour(GhostBehaviourEvent::Kad(kad::Event::OutboundQueryProgressed { id, result, .. })) => {
                     match result {
                         kad::QueryResult::GetClosestPeers(Ok(ok)) => {
                             for peer in ok.peers {
                                 // Dial the discovered peer if we aren't already connected
-                                let _ = swarm.dial(peer);
+                                let _ = swarm.dial(peer.peer_id);
                             }
                         }
                         kad::QueryResult::GetRecord(res) => {
                             if let Some(DhtResponder::Get(responder)) = dht_queries.remove(&id) {
                                 match res {
-                                    Ok(ok) => {
-                                        if let Some(record) = ok.records.into_iter().next() {
-                                            let _ = responder.send(Ok(record.record.value));
-                                        } else {
-                                            let _ = responder.send(Err("NotFound".into()));
-                                        }
+                                    Ok(kad::GetRecordOk::FoundRecord(record)) => {
+                                        let _ = responder.send(Ok(record.record.value));
+                                    }
+                                    Ok(kad::GetRecordOk::FinishedWithNoAdditionalRecord { .. }) => {
+                                        let _ = responder.send(Err("NotFound".into()));
                                     }
                                     Err(e) => { let _ = responder.send(Err(e.to_string())); }
                                 }
@@ -264,11 +260,11 @@ pub async fn run_swarm(
                     println!("👻 Relay Client event: {:?}", event);
                 }
                 SwarmEvent::Behaviour(GhostBehaviourEvent::Rendezvous(event)) => match event {
-                    rendezvous::client::Event::Registered { namespace, ttl, server } => {
-                        println!("👻 Registered with rendezvous server {:?} in namespace {:?} for {}s", server, namespace, ttl);
+                    rendezvous::client::Event::Registered { namespace, ttl, rendezvous_node } => {
+                        println!("👻 Registered with rendezvous server {:?} in namespace {:?} for {}s", rendezvous_node, namespace, ttl);
                     }
-                    rendezvous::client::Event::RegisterFailed { server, namespace, error } => {
-                        println!("👻 Rendezvous register failed {:?} {:?} {:?}", server, namespace, error);
+                    rendezvous::client::Event::RegisterFailed { rendezvous_node, namespace, error } => {
+                        println!("👻 Rendezvous register failed {:?} {:?} {:?}", rendezvous_node, namespace, error);
                     }
                     rendezvous::client::Event::Discovered { registrations, .. } => {
                         for reg in registrations {
@@ -279,8 +275,8 @@ pub async fn run_swarm(
                             let _ = swarm.dial(reg.record.peer_id());
                         }
                     }
-                    rendezvous::client::Event::DiscoverFailed { server, namespace, error } => {
-                        println!("👻 Rendezvous discover failed {:?} {:?} {:?}", server, namespace, error);
+                    rendezvous::client::Event::DiscoverFailed { rendezvous_node, namespace, error } => {
+                        println!("👻 Rendezvous discover failed {:?} {:?} {:?}", rendezvous_node, namespace, error);
                     }
                     rendezvous::client::Event::Expired { peer } => {
                         println!("👻 Rendezvous peer expired {:?}", peer);
@@ -303,7 +299,11 @@ pub fn create_swarm(
     let local_peer_id = PeerId::from(keypair.public());
 
     let (relay_transport, relay_client) = relay::client::new(local_peer_id);
-    
+    let webrtc_transport = webrtc::tokio::Transport::new(
+        keypair.clone(),
+        webrtc::tokio::Certificate::generate(&mut rand::thread_rng()).map_err(|e| e.to_string())?,
+    );
+
     let mut swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
         .with_tokio()
         .with_tcp(
@@ -311,15 +311,9 @@ pub fn create_swarm(
             noise::Config::new,
             yamux::Config::default,
         )?
+        .with_quic()
         .with_other_transport(|_key| relay_transport)?
-        .with_other_transport(|key| {
-            let cert = webrtc::tokio::Certificate::generate(&mut rand::thread_rng())
-                .unwrap_or_else(|_| panic!("Failed to generate WebRTC cert"));
-            Ok::<_, std::io::Error>(webrtc::tokio::Transport::new(
-                key.clone(),
-                cert,
-            ))
-        })?
+        .with_other_transport(|_key| webrtc_transport)?
         .with_dns()?
         .with_behaviour(|key: &libp2p::identity::Keypair| {
             let mut kad = kad::Behaviour::new(
@@ -358,11 +352,14 @@ pub fn create_swarm(
     swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
     swarm.listen_on("/ip4/0.0.0.0/udp/0/webrtc-direct".parse()?)?;
 
-    // Add bootstrap nodes to routing table
+    // Add bootstrap nodes to routing table and relay list
     let bootnodes = [
         ("QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN", "/dnsaddr/bootstrap.libp2p.io"),
         ("QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXBPxS8GWxghW", "/dnsaddr/bootstrap.libp2p.io"),
         ("QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt", "/ip4/147.75.109.213/tcp/4001"),
+        // Additional well-known public relays for smart fallback
+        ("QmYyQSo1c1Ym7RoBdGpiHJPSFkQzQkS9gY1yZ1HjH9hYzz", "/ip4/139.178.69.155/tcp/4001"), 
+        ("QmYyQSo1c1Ym7RoBdGpiHJPSFkQzQkS9gY1yZ1HjH9hYzz", "/ip4/139.178.69.155/udp/4001/quic-v1"),
     ];
     for (peer_str, addr_str) in bootnodes {
         if let (Ok(peer_id), Ok(addr)) = (peer_str.parse::<PeerId>(), addr_str.parse::<Multiaddr>()) {

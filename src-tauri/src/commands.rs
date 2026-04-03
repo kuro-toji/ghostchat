@@ -5,6 +5,25 @@ use serde::{Deserialize, Serialize};
 use crate::tor::TorController;
 use tokio::sync::Mutex;
 use tauri::State;
+use keyring::Entry;
+
+/// Get master key from OS secure enclave
+#[tauri::command]
+pub fn get_master_key() -> Result<Option<String>, String> {
+    let entry = Entry::new("ghostchat", "device_key").map_err(|e| e.to_string())?;
+    match entry.get_password() {
+        Ok(key) => Ok(Some(key)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(format!("Failed to retrieve key from secure storage: {}", e))
+    }
+}
+
+/// Save master key to OS secure enclave
+#[tauri::command]
+pub fn save_master_key(key_hex: String) -> Result<(), String> {
+    let entry = Entry::new("ghostchat", "device_key").map_err(|e| e.to_string())?;
+    entry.set_password(&key_hex).map_err(|e| format!("Failed to save key: {}", e))
+}
 
 /// App info response
 #[derive(Serialize, Deserialize)]
@@ -68,4 +87,10 @@ pub fn get_app_info() -> AppInfo {
             "Tor sidecar controller".to_string(),
         ],
     }
+}
+
+/// Get network capabilities (NAT detection)
+#[tauri::command]
+pub async fn get_network_capabilities() -> Result<crate::network_probe::NetworkCapabilities, String> {
+    Ok(crate::network_probe::probe_network().await)
 }

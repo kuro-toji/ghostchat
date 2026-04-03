@@ -3,6 +3,7 @@
 mod commands;
 mod tor;
 mod p2p;
+mod network_probe;
 
 use commands::TorState;
 use tor::TorController;
@@ -22,6 +23,9 @@ pub fn run() {
             commands::get_app_info,
             commands::start_tor,
             commands::stop_tor,
+            commands::get_master_key,
+            commands::save_master_key,
+            commands::get_network_capabilities,
             p2p::start_p2p_node,
             p2p::stop_p2p_node,
             p2p::discover_peers,

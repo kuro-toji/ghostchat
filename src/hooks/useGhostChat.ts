@@ -29,16 +29,24 @@ export function useGhostChat() {
         // ── 1. Init DB and Identity ──
         const { initDatabase } = await import('../lib/storage/database');
         const { bytesToHex, hexToBytes, randomBytes } = await import('@noble/hashes/utils');
-        const { load } = await import('@tauri-apps/plugin-store');
         
-        const store = await load('ghostchat-settings.json');
-        let masterKeyHex = await store.get<string>('device_key');
+        let masterKeyHex: string | null = null;
+        try {
+          masterKeyHex = await invoke<string | null>('get_master_key');
+        } catch (err) {
+          console.warn('Could not read from secure enclave:', err);
+        }
+
         let masterKey: Uint8Array;
         
         if (!masterKeyHex) {
           masterKey = randomBytes(32);
-          await store.set('device_key', bytesToHex(masterKey));
-          await store.save();
+          try {
+            await invoke('save_master_key', { keyHex: bytesToHex(masterKey) });
+          } catch (err) {
+            console.error('Failed to save master key to secure storage:', err);
+            // Fallback could be handled here if needed
+          }
         } else {
           masterKey = hexToBytes(masterKeyHex);
         }

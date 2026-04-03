@@ -21,11 +21,13 @@ tauri-plugin-store = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full", "sync", "macros", "rt-multi-thread"] }
-libp2p = { version = "0.54", features = ["tcp", "noise", "yamux", "kad", "identify", "ping", "relay", "rendezvous", "dcutr", "mdns", "macros", "request-response", "cbor", "tokio", "webrtc", "dns"] }
+libp2p = { version = "0.54", features = ["tcp", "noise", "yamux", "kad", "identify", "ping", "relay", "rendezvous", "dcutr", "mdns", "macros", "request-response", "cbor", "tokio", "dns", "webrtc", "quic", "dcutr"] }
 futures = "0.3"
 hex = "0.4"
 rand = "0.8"
 local-ip-address = "0.6"
+keyring = "3.2"
+stun = "0.6"
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

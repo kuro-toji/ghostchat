@@ -86,6 +86,11 @@ export async function publishPreKeyBundle(
   localSignedPreKeyPair = signedPreKeyPair;
   localOneTimePreKeyPair = oneTimePreKeyPair;
   
+  // Persist the pre-keys so they survive application restarts!
+  // This satisfies the "Medium-term Signed Pre-Keys" security requirement.
+  const { saveX3DHKeys } = await import('../storage/prekey-store');
+  await saveX3DHKeys(signedPreKeyPair, oneTimePreKeyPair);
+  
   // Build the bundle (public keys only)
   const bundle: PreKeyBundle = {
     identityKey: identity.publicKey,
@@ -236,6 +241,16 @@ export function startPreKeyRefresh(
   peerId: string
 ): void {
   stopPreKeyRefresh();
+  
+  import('../storage/prekey-store').then(async ({ loadX3DHKeys }) => {
+    const stored = await loadX3DHKeys();
+    if (stored) {
+      localSignedPreKeyPair = stored.signedPreKeyPair;
+      localOneTimePreKeyPair = stored.oneTimePreKeyPair;
+    } else {
+      await publishPreKeyBundle(identity, peerId);
+    }
+  }).catch(console.error);
   
   refreshTimer = setInterval(async () => {
     try {
