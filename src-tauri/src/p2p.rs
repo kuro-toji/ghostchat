@@ -394,13 +394,27 @@ pub async fn start_p2p_node(app: AppHandle, identity_key_hex: String, use_tor: b
     }
 
     // Decode the Ed25519 private key from the frontend
-    let key_bytes = hex::decode(&identity_key_hex).map_err(|e| e.to_string())?;
-    let secret_key = libp2p::identity::ed25519::SecretKey::try_from_bytes(&mut key_bytes.clone())
-        .map_err(|e| e.to_string())?;
+    let key_bytes = hex::decode(&identity_key_hex).map_err(|e| {
+        println!("❌ Hex decode error: {}", e);
+        e.to_string()
+    })?;
+    println!("👻 Key bytes length: {}", key_bytes.len());
+    
+    let mut key_bytes_clone = key_bytes.clone();
+    let secret_key = libp2p::identity::ed25519::SecretKey::try_from_bytes(&mut key_bytes_clone)
+        .map_err(|e| {
+            println!("❌ SecretKey creation error: {}", e);
+            e.to_string()
+        })?;
     let ed_keypair = libp2p::identity::ed25519::Keypair::from(secret_key);
     let keypair = libp2p::identity::Keypair::from(ed_keypair);
 
-    let swarm = create_swarm(keypair, use_tor).map_err(|e| e.to_string())?;
+    println!("👻 Keypair created successfully, local peer ID: {:?}", keypair.public());
+    
+    let swarm = create_swarm(keypair, use_tor).map_err(|e| {
+        println!("❌ Swarm creation error: {}", e);
+        e.to_string()
+    })?;
     let local_peer_id = swarm.local_peer_id().to_string();
 
     let (command_sender, command_receiver) = mpsc::channel(100);

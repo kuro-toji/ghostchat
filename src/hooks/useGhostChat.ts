@@ -32,7 +32,12 @@ export function useGhostChat() {
         
         let masterKeyHex: string | null = null;
         try {
-          masterKeyHex = await invoke<string | null>('get_master_key');
+          console.log('👻 Waiting for get_master_key...');
+          masterKeyHex = await Promise.race([
+             invoke<string | null>('get_master_key'),
+             new Promise<null>((resolve) => setTimeout(() => resolve(null), 1000))
+          ]);
+          console.log('👻 Got master key.');
         } catch (err) {
           console.warn('Could not read from secure enclave:', err);
         }
@@ -42,7 +47,10 @@ export function useGhostChat() {
         if (!masterKeyHex) {
           masterKey = randomBytes(32);
           try {
-            await invoke('save_master_key', { keyHex: bytesToHex(masterKey) });
+            await Promise.race([
+              invoke('save_master_key', { keyHex: bytesToHex(masterKey) }),
+              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout saving key")), 1000))
+            ]);
           } catch (err) {
             console.error('Failed to save master key to secure storage:', err);
             // Fallback could be handled here if needed
@@ -55,7 +63,7 @@ export function useGhostChat() {
         setDbReady(true);
 
         const { loadOrCreateIdentity } = await import('../lib/storage/identity-store');
-        const identity = await loadOrCreateIdentity();
+        const identity = await loadOrCreateIdentity(masterKey);
 
         const { initMessageService, onIncomingMessage, setOurIdentity } = await import('../lib/p2p/message-service');
         const { registerProtocolHandler } = await import('../lib/p2p/protocol');
@@ -78,7 +86,6 @@ export function useGhostChat() {
         // attemptTor is non-blocking in the background
         let useTorSetting = localStorage.getItem('ghostchat_use_tor') === 'true';
         try {
-          const { invoke } = await import('@tauri-apps/api/core');
           // If Tor is explicitly enabled in some persistent storage, we'd use it here.
           // For now, respect the user's request: "tor should be an option or choice"
           // We will NOT initialize Tor by default unless explicitly asked.
@@ -98,6 +105,7 @@ export function useGhostChat() {
         
         try {
           const { invoke } = await import('@tauri-apps/api/core');
+          console.log('👻 Identity key hex length:', bytesToHex(identity.privateKey).length);
           const ourPeerId = await invoke<string>('start_p2p_node', {
             identityKeyHex: bytesToHex(identity.privateKey),
             useTor: useTorSetting
@@ -109,13 +117,16 @@ export function useGhostChat() {
 
           // Step 1: Publish X3DH prekey bundle to DHT
           import('../lib/p2p/x3dh').then(({ publishPreKeyBundle }) => {
-            publishPreKeyBundle(identity, ourPeerId).catch(err => {
-              console.error('👻 Failed to publish X3DH PreKeys:', err);
-            });
+            const storedPeerId = useAppStore.getState().ourPeerId;
+            if (storedPeerId) {
+              publishPreKeyBundle(identity, storedPeerId).catch(err => {
+                console.error('👻 Failed to publish X3DH PreKeys:', err);
+              });
+            }
           });
         } catch (err) {
           console.error("❌ CRITICAL: Failed to start P2P node:", err);
-          // Set peer ID to error or retry?
+          setNodeOnline(false);
         }
 
         // ── 3. Register Protocol and Listeners ──
@@ -142,7 +153,8 @@ export function useGhostChat() {
               const contact = contacts.find(c => c.peerId === peer_id);
               if (contact && !hasActiveSession(peer_id)) {
                 // Tie-breaker: Only the peer with the lexicographically smaller PeerID initiates
-                if (ourPeerId && ourPeerId < peer_id) {
+                const myPeerId = useAppStore.getState().ourPeerId;
+                if (myPeerId && myPeerId < peer_id) {
                   console.log(`👻 Handshake tie-breaker: Initiating (we are smaller)`);
                   dialContactInBackground(peer_id, contact.multiaddr ?? null);
                 } else {
@@ -153,7 +165,11 @@ export function useGhostChat() {
           }
           
           // Poll peer count via backend
-          invoke<string[]>('get_connected_peers').then(peers => setPeerCount(peers.length));
+          (async () => {
+            const { invoke } = await import('@tauri-apps/api/core');
+            const peers = await invoke<string[]>('get_connected_peers');
+            setPeerCount(peers.length);
+          })();
         });
         cleanupRef.current.push(unlistenStatus);
 

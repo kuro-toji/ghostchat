@@ -6,12 +6,11 @@
 import { execute, queryOne } from './database';
 import { generateIdentity, type IdentityKeyPair } from '../crypto/identity';
 import { encrypt, decrypt } from '../crypto/encryption';
-import { bytesToHex, hexToBytes, randomBytes } from '@noble/hashes/utils';
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 
 const KEY_PUB   = 'identity_pub_hex';
 const KEY_PRIV  = 'identity_priv_enc';
 const KEY_NONCE = 'identity_priv_nonce';
-const KEY_ENCKEY = 'identity_enc_key';
 
 async function getSetting(key: string): Promise<string | null> {
   const row = await queryOne<{ value: string }>(
@@ -30,30 +29,36 @@ async function setSetting(key: string, value: string): Promise<void> {
 let cachedIdentity: IdentityKeyPair | null = null;
 
 /**
+ * Get cached identity (for restart scenarios after initial load).
+ */
+export function getCachedIdentity(): IdentityKeyPair | null {
+  return cachedIdentity;
+}
+
+/**
  * Load identity from DB, or generate + persist a new one.
  * Call once on startup before creating the libp2p node.
+ * @param masterKey - Key derived from OS secure enclave (Argon2id), used for identity encryption
  */
-export async function loadOrCreateIdentity(): Promise<IdentityKeyPair> {
+export async function loadOrCreateIdentity(masterKey: Uint8Array): Promise<IdentityKeyPair> {
   if (cachedIdentity) return cachedIdentity;
 
   const pubHex = await getSetting(KEY_PUB);
 
   if (pubHex) {
-    // Identity exists — decrypt and return it
+    // Identity exists — decrypt and return it using master key
     const privEncHex  = await getSetting(KEY_PRIV);
     const nonceHex    = await getSetting(KEY_NONCE);
-    const encKeyHex   = await getSetting(KEY_ENCKEY);
 
-    if (!privEncHex || !nonceHex || !encKeyHex) {
+    if (!privEncHex || !nonceHex) {
       console.warn('👻 Identity storage corrupt — regenerating');
-      return createAndSaveIdentity();
+      return createAndSaveIdentity(masterKey);
     }
 
     try {
-      const encKey    = hexToBytes(encKeyHex);
       const privBytes = decrypt(
         { ciphertext: hexToBytes(privEncHex), nonce: hexToBytes(nonceHex) },
-        encKey
+        masterKey
       );
 
       const identity: IdentityKeyPair = {
@@ -65,25 +70,23 @@ export async function loadOrCreateIdentity(): Promise<IdentityKeyPair> {
       cachedIdentity = identity;
       return identity;
     } catch (err) {
-      console.warn('👻 Identity decryption failed (likely memory-mode/Store mismatch) — regenerating');
-      return createAndSaveIdentity();
+      console.warn('👻 Identity decryption failed — regenerating');
+      return createAndSaveIdentity(masterKey);
     }
   }
 
-  return createAndSaveIdentity();
+  return createAndSaveIdentity(masterKey);
 }
 
-async function createAndSaveIdentity(): Promise<IdentityKeyPair> {
+async function createAndSaveIdentity(masterKey: Uint8Array): Promise<IdentityKeyPair> {
   const identity = generateIdentity();
 
-  // Random encryption key (replace with Argon2id master key when password auth added)
-  const encKey  = randomBytes(32);
-  const { ciphertext, nonce } = encrypt(identity.privateKey, encKey);
+  // Use master key for identity encryption (derived from OS secure enclave)
+  const { ciphertext, nonce } = encrypt(identity.privateKey, masterKey);
 
   await setSetting(KEY_PUB,    bytesToHex(identity.publicKey));
   await setSetting(KEY_PRIV,   bytesToHex(ciphertext));
   await setSetting(KEY_NONCE,  bytesToHex(nonce));
-  await setSetting(KEY_ENCKEY, bytesToHex(encKey));
 
   console.log('👻 New identity generated and saved');
   return identity;
@@ -93,7 +96,7 @@ async function createAndSaveIdentity(): Promise<IdentityKeyPair> {
  * Wipe identity from DB (for "factory reset" / panic wipe).
  */
 export async function wipeIdentity(): Promise<void> {
-  for (const key of [KEY_PUB, KEY_PRIV, KEY_NONCE, KEY_ENCKEY]) {
+  for (const key of [KEY_PUB, KEY_PRIV, KEY_NONCE]) {
     await execute('DELETE FROM settings WHERE key = ?', [key]);
   }
   console.log('👻 Identity wiped');

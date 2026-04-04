@@ -9,20 +9,24 @@ use keyring::Entry;
 
 /// Get master key from OS secure enclave
 #[tauri::command]
-pub fn get_master_key() -> Result<Option<String>, String> {
-    let entry = Entry::new("ghostchat", "device_key").map_err(|e| e.to_string())?;
-    match entry.get_password() {
-        Ok(key) => Ok(Some(key)),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(format!("Failed to retrieve key from secure storage: {}", e))
-    }
+pub async fn get_master_key() -> Result<Option<String>, String> {
+    tokio::task::spawn_blocking(|| {
+        let entry = Entry::new("ghostchat", "device_key").map_err(|e| e.to_string())?;
+        match entry.get_password() {
+            Ok(key) => Ok(Some(key)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(e) => Err(format!("Failed to retrieve key from secure storage: {}", e))
+        }
+    }).await.unwrap_or_else(|e| Err(format!("Tokio join error: {}", e)))
 }
 
 /// Save master key to OS secure enclave
 #[tauri::command]
-pub fn save_master_key(key_hex: String) -> Result<(), String> {
-    let entry = Entry::new("ghostchat", "device_key").map_err(|e| e.to_string())?;
-    entry.set_password(&key_hex).map_err(|e| format!("Failed to save key: {}", e))
+pub async fn save_master_key(key_hex: String) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let entry = Entry::new("ghostchat", "device_key").map_err(|e| e.to_string())?;
+        entry.set_password(&key_hex).map_err(|e| format!("Failed to save key: {}", e))
+    }).await.unwrap_or_else(|e| Err(format!("Tokio join error: {}", e)))
 }
 
 /// App info response

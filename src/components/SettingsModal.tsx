@@ -54,8 +54,11 @@ export function SettingsModal() {
       }
 
       // Restart the P2P node to route through Tor
-      const { loadOrCreateIdentity } = await import('../lib/storage/identity-store');
-      const identity = await loadOrCreateIdentity();
+      const { getCachedIdentity } = await import('../lib/storage/identity-store');
+      const identity = getCachedIdentity();
+      if (!identity) {
+        throw new Error('Identity not initialized');
+      }
       const { bytesToHex } = await import('@noble/hashes/utils');
       
       await invoke('stop_p2p_node');
@@ -78,8 +81,11 @@ export function SettingsModal() {
       await invoke('stop_tor');
       
       // Restart the P2P node without Tor
-      const { loadOrCreateIdentity } = await import('../lib/storage/identity-store');
-      const identity = await loadOrCreateIdentity();
+      const { getCachedIdentity } = await import('../lib/storage/identity-store');
+      const identity = getCachedIdentity();
+      if (!identity) {
+        throw new Error('Identity not initialized');
+      }
       const { bytesToHex } = await import('@noble/hashes/utils');
       
       await invoke('stop_p2p_node');
