@@ -4,6 +4,7 @@ mod commands;
 mod tor;
 mod p2p;
 mod network_probe;
+mod key_rotation;
 
 use commands::TorState;
 use tor::TorController;
