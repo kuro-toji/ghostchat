@@ -9,6 +9,9 @@
     "core:default",
     "clipboard-manager:default",
     "sql:default",
-    "store:default"
+    "store:default",
+    "shell:allow-spawn",
+    "shell:allow-kill",
+    "shell:allow-open"
   ]
 }

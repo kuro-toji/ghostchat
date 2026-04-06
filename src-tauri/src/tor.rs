@@ -183,6 +183,8 @@ impl TorController {
             *pid = Some(child.pid());
         }
 
+        let app_handle_clone = app_handle.clone();
+        
         // Monitor stdout for bootstrap progress in background
         tokio::spawn(async move {
             use tauri_plugin_shell::process::CommandEvent;
@@ -293,13 +295,86 @@ impl TorController {
                                     *state = TorState::Restarting(attempt);
                                 }
                                 
-                                // Exponential backoff
-                                let delay = RESTART_BACKOFF_BASE_MS * 2u64.pow((attempt - 1) as u32);
+                                // Calculate exponential backoff: 2s, 4s, 8s, 16s, 32s
+                                let delay = RESTART_BACKOFF_BASE_MS * 2u64.pow((attempt - 1).max(0) as u32);
                                 tokio::time::sleep(tokio::time::Duration::from_millis(delay)).await;
                                 
-                                // Note: Actual restart needs app_handle which is not available here.
-                                // The frontend polls status and triggers restart via IPC.
-                                // State is set to Restarting(N) so the frontend knows to call start_tor again.
+                                // Actually restart Tor using internal_restart
+                                // Note: We need to get restart count again after the delay
+                                let current_attempt = restart_count_clone.lock()
+                                    .map(|c| *c)
+                                    .unwrap_or(1);
+                                
+                                let new_delay = RESTART_BACKOFF_BASE_MS * 2u64.pow((current_attempt - 1).max(0) as u32);
+                                
+                                // Set back to bootstrapping and restart
+                                if let Ok(mut state) = state_clone.lock() {
+                                    *state = TorState::Bootstrapping(0);
+                                }
+                                
+                                // Reset progress tracking for new start
+                                {
+                                    let mut pt = progress_time_clone.lock().unwrap_or_else(|e| e.into_inner());
+                                    *pt = std::time::Instant::now();
+                                }
+                                {
+                                    let mut pv = progress_value_clone.lock().unwrap_or_else(|e| e.into_inner());
+                                    *pv = 0;
+                                }
+                                
+                                // Re-launch tor sidecar
+                                let app_dir = app_handle_clone
+                                    .path()
+                                    .app_data_dir()
+                                    .expect("Failed to get app data dir");
+                                
+                                let tor_hs_dir = app_dir.join("tor-hs");
+                                let tor_data_dir = app_dir.join("tor-data");
+                                
+                                // Ensure directories exist
+                                let _ = std::fs::create_dir_all(&tor_hs_dir);
+                                let _ = std::fs::create_dir_all(&tor_data_dir);
+                                
+                                use tauri_plugin_shell::ShellExt;
+                                if let Ok(sidecar) = app_handle_clone.shell().sidecar("tor") {
+                                    let mut sidecar = sidecar.args([
+                                        "--SocksPort", "9050",
+                                        "--HiddenServiceDir", tor_hs_dir.to_str().unwrap_or("./tor-hs"),
+                                        "--HiddenServicePort", "4001 127.0.0.1:4001",
+                                        "--DataDirectory", tor_data_dir.to_str().unwrap_or("./tor-data"),
+                                    ]);
+                                    
+                                    if let Ok((mut new_rx, child)) = sidecar.spawn() {
+                                        // Update PID
+                                        if let Ok(mut pid) = pid_clone.lock() {
+                                            *pid = Some(child.pid());
+                                        }
+                                        
+                                        // Recursively handle events from new tor process
+                                        // This replaces the current spawn task's event loop
+                                        while let Some(evt) = new_rx.recv().await {
+                                            if let CommandEvent::Terminated(..) = evt {
+                                                // Let outer loop handle this termination
+                                                // by breaking and letting the next iteration
+                                                // of the outer restart loop pick it up
+                                                break;
+                                            }
+                                            // Forward other events
+                                            if let CommandEvent::Stdout(line) = &evt {
+                                                let line_str = String::from_utf8_lossy(line);
+                                                if let Some(progress) = parse_bootstrap_progress(&line_str) {
+                                                    if let Ok(mut st) = state_clone.lock() {
+                                                        *st = if progress >= 100 {
+                                                            TorState::Connected
+                                                        } else {
+                                                            TorState::Bootstrapping(progress as u8)
+                                                        };
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             } else {
                                 eprintln!("Tor crash loop detected — giving up after {} attempts", MAX_RESTART_ATTEMPTS);
                                 if let Ok(mut state) = state_clone.lock() {
