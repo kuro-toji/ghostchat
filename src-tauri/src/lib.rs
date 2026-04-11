@@ -4,7 +4,8 @@ mod commands;
 mod tor;
 mod p2p;
 mod network_probe;
-mod key_rotation;
+// key_rotation is dead code — Double Ratchet is implemented in TypeScript
+// mod key_rotation;
 
 use commands::TorState;
 use tor::TorController;

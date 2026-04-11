@@ -398,8 +398,15 @@ pub async fn start_p2p_node(app: AppHandle, identity_key_hex: String, use_tor: b
         println!("❌ Hex decode error: {}", e);
         e.to_string()
     })?;
+
+    // Validate key length before attempting to create secret key
+    if key_bytes.len() != 32 {
+        println!("❌ Invalid Ed25519 key length: {} (expected 32)", key_bytes.len());
+        return Err(format!("Invalid Ed25519 key length: {} (expected 32)", key_bytes.len()));
+    }
+
     println!("👻 Key bytes length: {}", key_bytes.len());
-    
+
     let mut key_bytes_clone = key_bytes.clone();
     let secret_key = libp2p::identity::ed25519::SecretKey::try_from_bytes(&mut key_bytes_clone)
         .map_err(|e| {
