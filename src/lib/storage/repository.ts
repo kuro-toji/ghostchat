@@ -11,6 +11,7 @@
 import { execute, query, queryOne, getMasterKey } from './database';
 import { encrypt, decrypt, type EncryptedPayload } from '../crypto/encryption';
 import type { Contact, DecryptedMessage } from '../../types';
+import type { RatchetState } from '../crypto/double-ratchet';
 
 // ─── Contacts ────────────────────────────────────────────────
 
@@ -146,6 +147,82 @@ export async function getUnreadCounts(): Promise<Map<string, number>> {
 
 export async function deleteAllMessages(peerId: string): Promise<void> {
   await execute('DELETE FROM messages WHERE session_peer_id = ?', [peerId]);
+}
+
+// ─── Sessions (encrypted at rest) ──────────────────────────
+
+/**
+ * Save session ratchet state to database.
+ * Keys are encrypted with master key before storage.
+ */
+export async function saveSession(peerId: string, state: RatchetState): Promise<void> {
+  const key = getMasterKey();
+  if (!key) return; // Memory-only mode — don't persist
+
+  const toEncrypt = new Uint8Array(32 * 5);
+  toEncrypt.set(state.rootKey, 0);
+  toEncrypt.set(state.sendingChainKey, 32);
+  toEncrypt.set(state.receivingChainKey, 64);
+  toEncrypt.set(state.ourDHKeyPair.privateKey, 96);
+  toEncrypt.set(state.ourDHKeyPair.publicKey, 128);
+
+  const payload = encrypt(toEncrypt, key);
+  const now = Date.now();
+
+  await execute(`
+    INSERT OR REPLACE INTO sessions (peer_id, root_key, sending_chain_key, receiving_chain_key, our_dh_private, our_dh_public, their_dh_public, sending_index, receiving_index, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    peerId,
+    Array.from(payload.ciphertext),
+    Array.from(payload.nonce),
+    null, null, null, null, // legacy columns (now stores encrypted blob)
+    state.sendingIndex,
+    state.receivingIndex,
+    now,
+    now,
+  ]);
+}
+
+/**
+ * Load session ratchet state from database.
+ * Returns null if no session or master key unavailable.
+ */
+export async function loadSession(peerId: string): Promise<RatchetState | null> {
+  const key = getMasterKey();
+  if (!key) return null;
+
+  const row = await queryOne<any>('SELECT * FROM sessions WHERE peer_id = ?', [peerId]);
+  if (!row) return null;
+
+  try {
+    const payload: EncryptedPayload = {
+      ciphertext: new Uint8Array(row.root_key),
+      nonce: new Uint8Array(row.sending_chain_key),
+    };
+    const decrypted = decrypt(payload, key);
+
+    return {
+      rootKey: decrypted.slice(0, 32),
+      sendingChainKey: decrypted.slice(32, 64),
+      receivingChainKey: decrypted.slice(64, 96),
+      ourDHKeyPair: {
+        privateKey: decrypted.slice(96, 128),
+        publicKey: decrypted.slice(128, 160),
+      },
+      theirDHPublicKey: row.their_dh_public ? new Uint8Array(row.their_dh_public) : new Uint8Array(32),
+      sendingIndex: row.sending_index,
+      receivingIndex: row.receiving_index,
+      previousChainLength: 0,
+      skippedKeys: new Map(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteSession(peerId: string): Promise<void> {
+  await execute('DELETE FROM sessions WHERE peer_id = ?', [peerId]);
 }
 
 // ─── Settings ────────────────────────────────────────────────
