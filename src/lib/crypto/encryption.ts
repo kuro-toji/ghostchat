@@ -70,8 +70,10 @@ export function encrypt(
   usedNonces.add(nonceHex);
   if (usedNonces.size > MAX_NONCE_HISTORY) {
     // Clear oldest half to prevent memory growth
+    // Since Set iteration order is insertion order, we can reliably delete oldest entries
     const entries = Array.from(usedNonces);
-    for (let i = 0; i < entries.length / 2; i++) {
+    const halfCount = Math.floor(entries.length / 2);
+    for (let i = 0; i < halfCount; i++) {
       usedNonces.delete(entries[i]);
     }
   }
