@@ -130,19 +130,26 @@ export async function fetchPreKeyBundle(
   try {
     const json = JSON.parse(new TextDecoder().decode(value)) as SerializedPreKeyBundle;
     const bundle = deserializeBundle(json);
-    
+
+    // Validate bundle timestamp to prevent replay of stale bundles
+    const now = Date.now();
+    if (bundle.timestamp && (now - bundle.timestamp) > PREKEY_REFRESH_INTERVAL) {
+      console.warn(`👻 Stale pre-key bundle for ${peerId.slice(0, 16)}... (age: ${now - bundle.timestamp}ms)`);
+      return null;
+    }
+
     // Verify the signature
     const valid = verify(
       bundle.signedPreKeyPub,
       bundle.signedPreKeySignature,
       bundle.identityKey
     );
-    
+
     if (!valid) {
       console.error(`👻 INVALID pre-key bundle signature for ${peerId.slice(0, 16)}...`);
       return null;
     }
-    
+
     return bundle;
   } catch (err) {
     console.error('Failed to parse pre-key bundle:', err);
