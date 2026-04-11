@@ -162,6 +162,10 @@ impl TorController {
                 "--HiddenServiceDir", tor_hs_dir.to_str().unwrap_or("./tor-hs"),
                 "--HiddenServicePort", &format!("4001 127.0.0.1:4001"),
                 "--DataDirectory", tor_data_dir.to_str().unwrap_or("./tor-data"),
+                // Stream isolation for traffic correlation prevention
+                "--IsolateDestAddr",
+                "--IsolateSOCKSAuth",
+                "--Sandbox", "1",
             ]);
 
         let state_clone = self.state.clone();
